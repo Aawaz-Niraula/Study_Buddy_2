@@ -185,6 +185,7 @@ export default function Home() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [reviewTestId, setReviewTestId] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   // Computed values
   const hasResults = !!(
@@ -261,14 +262,17 @@ export default function Home() {
     try {
       const res = await fetch("/api/generate");
       const data = await res.json().catch(() => ({}));
-      setHistory(Array.isArray(data.sessions) ? data.sessions : []);
+      const sessions = Array.isArray(data.sessions) ? data.sessions : [];
+      setHistory(sessions);
       
-      // Also collect all test submissions from all sessions
+      // Fetch full details for each session to get test_submissions
       const allTests: TestSubmission[] = [];
-      if (Array.isArray(data.sessions)) {
-        for (const session of data.sessions) {
-          if (Array.isArray(session.test_submissions)) {
-            for (const test of session.test_submissions) {
+      for (const session of sessions) {
+        try {
+          const sessionRes = await fetch(`/api/generate?sessionId=${encodeURIComponent(session.id)}`);
+          const sessionData = await sessionRes.json().catch(() => ({}));
+          if (sessionData.session && Array.isArray(sessionData.session.test_submissions)) {
+            for (const test of sessionData.session.test_submissions) {
               allTests.push({
                 ...test,
                 sessionId: session.id,
@@ -276,6 +280,8 @@ export default function Home() {
               });
             }
           }
+        } catch {
+          // Skip sessions that fail to load
         }
       }
       setAllTestSubmissions(allTests);
@@ -787,6 +793,26 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#06060b] via-[#0b0b12] to-[#11111a] text-[#f2efff] relative">
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -50 }}
+            className="fixed top-16 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 bg-red-500/90 backdrop-blur-sm border border-red-400/50 rounded-xl shadow-lg shadow-red-500/20"
+          >
+            <span className="text-sm font-medium text-white">{toast}</span>
+            <button
+              onClick={() => setToast(null)}
+              className="p-1 rounded-full hover:bg-white/20 transition-colors"
+            >
+              <X className="w-4 h-4 text-white" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Top Bar */}
       <TopBar 
         onTestHistoryClick={handleTestHistoryClick} 
@@ -816,7 +842,8 @@ export default function Home() {
                     // Check if current session is empty
                     const hasContent = text.trim() || attachments.length > 0 || generations.length > 0;
                     if (!hasContent && !sessionId) {
-                      setError("Use the current session first before starting a new session");
+                      setToast("Please use your current session first");
+                      setTimeout(() => setToast(null), 4000); // Auto-dismiss after 4s
                       return;
                     }
                     resetSession();
