@@ -33,9 +33,9 @@ export function Sidebar({ isOpen, onClose, side, children, title }: SidebarProps
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
+            transition={{ duration: 0.2 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40"
           />
 
           {/* Sidebar */}
@@ -44,31 +44,35 @@ export function Sidebar({ isOpen, onClose, side, children, title }: SidebarProps
             animate={{ x: 0 }}
             exit={{ x: side === "left" ? "-100%" : "100%" }}
             transition={{
-              duration: 0.3,
-              ease: [0.4, 0.0, 0.2, 1], // cubic-bezier
+              type: "tween",
+              duration: 0.25,
+              ease: [0.25, 0.1, 0.25, 1],
             }}
-            className={`fixed top-0 ${side === "left" ? "left-0" : "right-0"} bottom-0 w-[80%] max-w-md bg-[#0b0b12] z-50 overflow-y-auto`}
+            className={`fixed top-0 ${side === "left" ? "left-0" : "right-0"} bottom-0 w-[80vw] max-w-[320px] bg-[#0b0b12] z-50 flex flex-col`}
             style={{
               boxShadow: side === "left" ? "4px 0 24px rgba(0,0,0,0.5)" : "-4px 0 24px rgba(0,0,0,0.5)",
+              willChange: "transform",
             }}
           >
-            {/* Header */}
-            <div className="sticky top-0 bg-[#0b0b12] border-b border-white/10 px-6 py-4 flex items-center justify-between">
-              <h2 className="text-base font-medium text-[#f2efff] tracking-wide uppercase text-sm">
+            {/* Header - Fixed */}
+            <div className="shrink-0 bg-[#0b0b12] border-b border-white/10 px-4 py-3 flex items-center justify-between">
+              <h2 className="text-sm font-medium text-[#f2efff] tracking-wide uppercase">
                 {title || "Menu"}
               </h2>
               <motion.button
-                whileTap={{ opacity: 0.6 }}
+                whileTap={{ opacity: 0.6, scale: 0.95 }}
                 onClick={onClose}
-                className="p-2 rounded-full hover:bg-white/5 transition-colors"
+                className="p-2 rounded-full hover:bg-white/5 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                 aria-label="Close sidebar"
               >
                 <X className="w-5 h-5 text-[#ddd6fe]" />
               </motion.button>
             </div>
 
-            {/* Content */}
-            <div className="p-6">{children}</div>
+            {/* Content - Scrollable */}
+            <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-4">
+              {children}
+            </div>
           </motion.div>
         </>
       )}

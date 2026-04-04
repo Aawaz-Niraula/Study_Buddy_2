@@ -458,7 +458,9 @@ export default function Home() {
     })));
     
     setUploadStatus("");
+    // Close both sidebars when opening a session
     setSessionHistoryOpen(false);
+    setTestHistoryOpen(false);
     setTestMode(false);
     setTestQuestions(null);
     setTestAnswers({});

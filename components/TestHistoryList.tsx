@@ -91,7 +91,6 @@ export function TestHistoryList({
           const date = new Date(test.created_at).toLocaleDateString("en-US", {
             month: "short",
             day: "numeric",
-          year: "numeric",
         });
         const time = new Date(test.created_at).toLocaleTimeString("en-US", {
           hour: "numeric",
@@ -106,36 +105,32 @@ export function TestHistoryList({
             transition={{ delay: idx * 0.05 }}
             whileTap={{ opacity: 0.6, scale: 0.98 }}
             onClick={() => onSelectTest(test.id)}
-            className={`w-full text-left p-4 rounded-xl border transition-all ${colors.bg} ${colors.border} hover:bg-opacity-80`}
+            className={`w-full text-left p-3 rounded-xl border transition-all overflow-hidden ${colors.bg} ${colors.border} hover:bg-opacity-80`}
           >
-            <div className="flex items-start justify-between gap-3">
-              {/* Content */}
-              <div className="flex-1">
-                {test.sessionTitle && (
-                  <p className="text-xs text-[#a78bfa] mb-1 truncate">
-                    {test.sessionTitle}
-                  </p>
-                )}
-                <div className="flex items-center gap-2 mb-2">
-                  <ClockIcon className="w-4 h-4 text-[#857ca2]" />
-                  <span className="text-xs text-[#857ca2]">
-                    {date} • {time}
-                  </span>
-                </div>
-                <div className={`text-lg font-bold ${colors.text} mb-1`}>
-                  {test.score}/{test.total} — {percentage}%
-                </div>
-                <p className="text-xs text-[#857ca2]">
-                  {test.total} question{test.total !== 1 ? "s" : ""}
-                </p>
+            {/* Session Title */}
+            {test.sessionTitle && (
+              <p className="text-xs text-[#a78bfa] mb-2 truncate max-w-full">
+                {test.sessionTitle}
+              </p>
+            )}
+            
+            {/* Score and Badge Row */}
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className={`text-base font-bold ${colors.text} truncate`}>
+                {test.score}/{test.total} — {percentage}%
               </div>
-
-              {/* Badge */}
               <div
-                className={`px-3 py-1 rounded-full text-xs font-medium text-white ${colors.badge}`}
+                className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold text-white ${colors.badge}`}
               >
                 {percentage >= 70 ? "Pass" : percentage >= 50 ? "Fair" : "Fail"}
               </div>
+            </div>
+            
+            {/* Date/Time Row */}
+            <div className="flex items-center gap-1.5 text-[11px] text-[#857ca2]">
+              <ClockIcon className="w-3 h-3 shrink-0" />
+              <span className="truncate">{date} • {time}</span>
+              <span className="shrink-0">• {test.total}Q</span>
             </div>
           </motion.button>
         );
