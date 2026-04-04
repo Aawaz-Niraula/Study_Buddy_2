@@ -1,14 +1,15 @@
 "use client";
 
-import { Clock, MoreVertical } from "lucide-react";
+import { Clock, MoreVertical, FlaskConical, FolderOpen } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface TopBarProps {
-  onHistoryClick: () => void;
+  onTestHistoryClick: () => void;
+  onSessionHistoryClick: () => void;
   onMenuClick: () => void;
 }
 
-export function TopBar({ onHistoryClick, onMenuClick }: TopBarProps) {
+export function TopBar({ onTestHistoryClick, onSessionHistoryClick, onMenuClick }: TopBarProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: -10 }}
@@ -23,14 +24,27 @@ export function TopBar({ onHistoryClick, onMenuClick }: TopBarProps) {
 
         {/* Icon Buttons */}
         <div className="flex items-center gap-2">
+          {/* Session History (Left Sidebar) */}
           <motion.button
             whileTap={{ opacity: 0.6 }}
-            onClick={onHistoryClick}
+            onClick={onSessionHistoryClick}
+            className="p-3 rounded-full hover:bg-white/5 transition-colors min-w-[48px] min-h-[48px] flex items-center justify-center"
+            aria-label="Session history"
+          >
+            <FolderOpen className="w-5 h-5 text-[#ddd6fe]" />
+          </motion.button>
+
+          {/* Test History (Right Sidebar) */}
+          <motion.button
+            whileTap={{ opacity: 0.6 }}
+            onClick={onTestHistoryClick}
             className="p-3 rounded-full hover:bg-white/5 transition-colors min-w-[48px] min-h-[48px] flex items-center justify-center"
             aria-label="Test history"
           >
             <Clock className="w-5 h-5 text-[#ddd6fe]" />
           </motion.button>
+
+          {/* Menu */}
           <motion.button
             whileTap={{ opacity: 0.6 }}
             onClick={onMenuClick}

@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { ArrowLeft, ChevronRight, ChevronLeft, X, Clock } from "lucide-react";
 import { BottomSheet } from "./BottomSheet";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 interface Question {
   question?: string;
@@ -46,21 +46,25 @@ export function TestScreen({
     timerMinutes ? timerMinutes * 60 : null
   );
   const [timeIsUp, setTimeIsUp] = useState(false);
+  
+  // Use ref for onSubmit to avoid re-renders
+  const onSubmitRef = useRef(onSubmit);
+  onSubmitRef.current = onSubmit;
 
   const question = questions[currentIndex];
   const progress = ((currentIndex + 1) / totalQuestions) * 100;
 
-  // Timer logic
+  // Timer logic - using ref to avoid dependency issues
   useEffect(() => {
     if (timeLeft === null) return;
 
     if (timeLeft <= 0) {
       setTimeIsUp(true);
       // Show "Time is up!" briefly, then auto-submit
-      setTimeout(() => {
-        onSubmit();
+      const timeout = setTimeout(() => {
+        onSubmitRef.current();
       }, 1500);
-      return;
+      return () => clearTimeout(timeout);
     }
 
     const interval = setInterval(() => {
@@ -68,7 +72,7 @@ export function TestScreen({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [timeLeft, onSubmit]);
+  }, [timeLeft]);
 
   const getTimerColor = () => {
     if (timeLeft === null || !timerMinutes) return "text-green-400";

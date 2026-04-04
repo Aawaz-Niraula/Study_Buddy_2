@@ -1,18 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { TopBar } from "@/components/TopBar";
 import { Sidebar } from "@/components/Sidebar";
 import { BottomSheet } from "@/components/BottomSheet";
-import { ContextAwareButton } from "@/components/ContextAwareButton";
 import { SessionForm } from "@/components/SessionForm";
 import { TestOptionsSheet } from "@/components/TestOptionsSheet";
-import { SessionHistoryList, type SessionItem } from "@/components/SessionHistoryList";
+import { GenerationHistoryList } from "@/components/GenerationHistoryList";
 import { TestHistoryList, type TestSubmissionItem } from "@/components/TestHistoryList";
 import { TestScreen } from "@/components/TestScreen";
 import { ResultsScreen } from "@/components/ResultsScreen";
 import { TestReviewScreen } from "@/components/TestReviewScreen";
-import { Sparkles, CircleHelp, X } from "lucide-react";
+import { GeneratedQuestionsView } from "@/components/GeneratedQuestionsView";
+import { Sparkles, CircleHelp, X, BookOpen, LayoutPanelLeft, Trophy } from "lucide-react";
+import { motion } from "framer-motion";
 
 declare global {
   interface Window {
@@ -191,11 +192,34 @@ export default function Home() {
       (questions.flashcards?.length ?? 0) > 0)
   );
 
-  const getButtonState = (): "new-session" | "take-test" | "see-results" => {
-    if (showResults && testSubmitted) return "see-results";
-    if (sessionId && hasResults) return "take-test";
-    return "new-session";
-  };
+  const countQuestions = (set: QuestionSet | null | undefined) =>
+    (set?.multiple_choice?.length ?? 0) +
+    (set?.short_answer?.length ?? 0) +
+    (set?.true_false?.length ?? 0) +
+    (set?.flashcards?.length ?? 0);
+
+  const generationItems = useMemo(
+    () =>
+      generations.map((generation) => ({
+        id: generation.id,
+        created_at: generation.created_at,
+        difficulty: generation.difficulty,
+        mode: generation.mode,
+        questionCount: countQuestions(generation.questions),
+      })),
+    [generations]
+  );
+
+  const testHistoryItems: TestSubmissionItem[] = useMemo(
+    () =>
+      testSubmissions.map((submission) => ({
+        id: submission.id,
+        created_at: submission.created_at,
+        score: submission.score,
+        total: submission.total,
+      })),
+    [testSubmissions]
+  );
 
   // Helper functions
   const resetSession = () => {
@@ -220,6 +244,8 @@ export default function Home() {
     setShowResults(false);
     setReviewTestId(null);
     setTimerMinutes(null);
+    setSessionHistoryOpen(false);
+    setTestHistoryOpen(false);
   };
 
   const loadHistory = async () => {
@@ -372,7 +398,7 @@ export default function Home() {
     setSourceKind(session.source_kind);
     setMode(session.latest_mode ?? "mix");
     setDifficulty(session.latest_difficulty ?? "medium");
-    setText("");
+    setText(session.source_payload?.text ?? "");
     setAttachments(session.source_payload?.attachments ?? []);
     setGenerations(Array.isArray(session.generations) ? session.generations : []);
     setQuestions(session.latest_generation?.questions ?? null);
@@ -524,6 +550,7 @@ export default function Home() {
     const submission = testSubmissions.find((t) => t.id === testId);
     if (!submission) return;
 
+    setTestHistoryOpen(false);
     setReviewTestId(testId);
   };
 
@@ -554,16 +581,17 @@ export default function Home() {
   const flatQuestions = getFlattenedTestQuestions();
   const currentQuestion = flatQuestions[currentQuestionIndex];
 
-  // Get results for ResultsScreen
-  const getResultQuestions = () => {
-    if (!testQuestions || !testSubmitted) return [];
-
+  const buildReviewQuestions = (
+    questionSet: QuestionSet | null | undefined,
+    answers: TestAnswers,
+    shortAnswerEvaluations?: ShortAnswerEvaluation[]
+  ) => {
+    if (!questionSet) return [];
     const results: any[] = [];
-    const activeSubmission = testSubmissions.find((t) => t.id === activeTestSubmissionId);
 
-    if (testQuestions.multiple_choice) {
-      testQuestions.multiple_choice.forEach((q, i) => {
-        const userAnswer = testAnswers[`mcq-${i}`];
+    if (questionSet.multiple_choice) {
+      questionSet.multiple_choice.forEach((q, i) => {
+        const userAnswer = answers[`mcq-${i}`];
         const correct =
           userAnswer === String(q.answer ?? "")
             .trim()
@@ -578,9 +606,9 @@ export default function Home() {
       });
     }
 
-    if (testQuestions.true_false) {
-      testQuestions.true_false.forEach((q, i) => {
-        const userAnswer = testAnswers[`tf-${i}`];
+    if (questionSet.true_false) {
+      questionSet.true_false.forEach((q, i) => {
+        const userAnswer = answers[`tf-${i}`];
         const correctAnswer =
           typeof q.answer === "boolean" ? (q.answer ? "True" : "False") : String(q.answer);
         results.push({
@@ -592,10 +620,10 @@ export default function Home() {
       });
     }
 
-    if (testQuestions.short_answer) {
-      testQuestions.short_answer.forEach((q, i) => {
-        const userAnswer = testAnswers[`sa-${i}`];
-        const evaluation = activeSubmission?.shortAnswerEvaluations?.find((e) => e.index === i);
+    if (questionSet.short_answer) {
+      questionSet.short_answer.forEach((q, i) => {
+        const userAnswer = answers[`sa-${i}`];
+        const evaluation = shortAnswerEvaluations?.find((e) => e.index === i);
         results.push({
           question: q.question,
           answer: q.answer,
@@ -610,21 +638,7 @@ export default function Home() {
   };
 
   // Handlers
-  const handleContextButtonClick = () => {
-    const state = getButtonState();
-    if (state === "new-session") {
-      resetSession();
-    } else if (state === "take-test") {
-      setTestOptionsOpen(true);
-    } else if (state === "see-results") {
-      setShowResults(true);
-    }
-  };
-
   const handleSessionHistoryClick = () => {
-    if (!sessionHistoryOpen && history.length === 0) {
-      loadHistory();
-    }
     setSessionHistoryOpen(!sessionHistoryOpen);
     setTestHistoryOpen(false);
     setMenuOpen(false);
@@ -644,7 +658,11 @@ export default function Home() {
   if (reviewTestId) {
     const submission = testSubmissions.find((t) => t.id === reviewTestId);
     if (submission) {
-      const reviewQuestions = getResultQuestions();
+      const reviewQuestions = buildReviewQuestions(
+        submission.questions,
+        submission.answers,
+        submission.shortAnswerEvaluations
+      );
       return (
         <TestReviewScreen
           questions={reviewQuestions}
@@ -657,7 +675,11 @@ export default function Home() {
   }
 
   if (showResults && testScore) {
-    const resultQuestions = getResultQuestions();
+    const resultQuestions = buildReviewQuestions(
+      testQuestions,
+      testAnswers,
+      testSubmissions.find((t) => t.id === activeTestSubmissionId)?.shortAnswerEvaluations
+    );
     return (
       <ResultsScreen
         score={testScore.score}
@@ -707,7 +729,11 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#06060b] via-[#0b0b12] to-[#11111a] text-[#f2efff] relative">
       {/* Top Bar */}
-      <TopBar onHistoryClick={handleTestHistoryClick} onMenuClick={handleMenuClick} />
+      <TopBar 
+        onTestHistoryClick={handleTestHistoryClick} 
+        onSessionHistoryClick={handleSessionHistoryClick}
+        onMenuClick={handleMenuClick} 
+      />
 
       {/* Main Content */}
       <div className="pt-20 px-4 pb-24 max-w-3xl mx-auto">
@@ -738,9 +764,29 @@ export default function Home() {
                 </p>
               </div>
 
-              {/* Context-Aware Primary Button - left on mobile, below subtitle on desktop */}
-              <div className="mt-6 md:text-center">
-                <ContextAwareButton state={getButtonState()} onClick={handleContextButtonClick} />
+              {/* Action Buttons */}
+              <div className="mt-6 flex flex-wrap justify-center gap-3">
+                {/* NEW SESSION Button */}
+                <motion.button
+                  whileTap={{ opacity: 0.6 }}
+                  onClick={resetSession}
+                  className="inline-flex items-center gap-2 min-h-[48px] px-6 py-3 rounded-2xl font-medium text-sm tracking-wide bg-white/5 border border-white/10 text-[#ddd6fe] hover:bg-white/8 transition-all"
+                >
+                  <X className="w-4 h-4" />
+                  NEW SESSION
+                </motion.button>
+
+                {/* TAKE TEST Button - only show if has questions */}
+                {hasResults && (
+                  <motion.button
+                    whileTap={{ opacity: 0.6 }}
+                    onClick={() => setTestOptionsOpen(true)}
+                    className="inline-flex items-center gap-2 min-h-[48px] px-6 py-3 rounded-2xl font-medium text-sm tracking-wide bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] text-white shadow-lg transition-all"
+                  >
+                    <BookOpen className="w-4 h-4" />
+                    TAKE TEST
+                  </motion.button>
+                )}
               </div>
             </div>
 
@@ -788,36 +834,43 @@ export default function Home() {
               uploadStatus={uploadStatus}
             />
 
-            {/* Generated Questions Display (simplified for now) */}
-            {hasResults && (
-              <div className="mt-8 p-6 bg-white/5 border border-white/10 rounded-2xl text-center">
-                <p className="text-[#ddd6fe] mb-2">
-                  ✓ Questions generated successfully!
-                </p>
-                <p className="text-sm text-[#857ca2]">
-                  Use "TAKE TEST" to start practicing
-                </p>
-              </div>
+            {/* Generated Questions - Interactive Q&A with Reveal Answers */}
+            {hasResults && questions && (
+              <GeneratedQuestionsView
+                questions={questions}
+                difficulty={difficulty}
+                mode={mode}
+              />
             )}
           </>
         )}
       </div>
 
-      {/* Session History Sidebar */}
+      {/* Session History Sidebar (LEFT) - Shows generations within current session */}
       <Sidebar
         isOpen={sessionHistoryOpen}
         onClose={() => setSessionHistoryOpen(false)}
         side="left"
-        title="Sessions"
+        title="Session Generations"
       >
-        <SessionHistoryList
-          sessions={history}
-          onSelectSession={openSession}
-          loading={historyLoading}
+        <GenerationHistoryList
+          generations={generationItems}
+          activeId={activeGenerationId}
+          onSelect={(id) => {
+            const gen = generations.find((g) => g.id === id);
+            if (gen) {
+              setActiveGenerationId(id);
+              setQuestions(gen.questions);
+              setDifficulty(gen.difficulty as "easy" | "medium" | "difficult");
+              setMode(gen.mode);
+              setSessionHistoryOpen(false);
+            }
+          }}
+          loading={false}
         />
       </Sidebar>
 
-      {/* Test History Sidebar */}
+      {/* Test History Sidebar (RIGHT) - Shows all test submissions */}
       <Sidebar
         isOpen={testHistoryOpen}
         onClose={() => setTestHistoryOpen(false)}
@@ -825,12 +878,7 @@ export default function Home() {
         title="Test History"
       >
         <TestHistoryList
-          tests={testSubmissions.map((t) => ({
-            id: t.id,
-            created_at: t.created_at,
-            score: t.score,
-            total: t.total,
-          }))}
+          tests={testHistoryItems}
           onSelectTest={openTestSubmission}
           loading={false}
         />
@@ -846,23 +894,76 @@ export default function Home() {
         />
       </BottomSheet>
 
-      {/* Menu Bottom Sheet (placeholder) */}
+      {/* Menu Bottom Sheet */}
       <BottomSheet isOpen={menuOpen} onClose={() => setMenuOpen(false)}>
         <div className="py-4">
           <h3 className="text-xl font-bold text-[#f2efff] mb-4">Menu</h3>
           <div className="space-y-2">
-            <button
-              onClick={handleSessionHistoryClick}
-              className="w-full text-left p-4 rounded-xl bg-white/5 hover:bg-white/8 transition-colors text-[#ddd6fe]"
+            {/* Take Test Option - in menu for quick access */}
+            {hasResults && (
+              <motion.button
+                whileTap={{ opacity: 0.6 }}
+                onClick={() => {
+                  setMenuOpen(false);
+                  setTestOptionsOpen(true);
+                }}
+                className="w-full text-left p-4 rounded-xl bg-gradient-to-r from-[#a78bfa]/20 to-[#f9a8d4]/20 border border-[#a78bfa]/30 hover:bg-[#a78bfa]/30 transition-colors text-[#f2efff] flex items-center gap-3"
+              >
+                <BookOpen className="w-5 h-5 text-[#a78bfa]" />
+                <div>
+                  <span className="font-medium">Take Test</span>
+                  <p className="text-xs text-[#857ca2] mt-0.5">Start a timed quiz</p>
+                </div>
+              </motion.button>
+            )}
+
+            {/* View Sessions */}
+            <motion.button
+              whileTap={{ opacity: 0.6 }}
+              onClick={() => {
+                setMenuOpen(false);
+                handleSessionHistoryClick();
+              }}
+              className="w-full text-left p-4 rounded-xl bg-white/5 hover:bg-white/8 transition-colors text-[#ddd6fe] flex items-center gap-3"
             >
-              View Sessions
-            </button>
-            <button
-              onClick={handleTestHistoryClick}
-              className="w-full text-left p-4 rounded-xl bg-white/5 hover:bg-white/8 transition-colors text-[#ddd6fe]"
+              <LayoutPanelLeft className="w-5 h-5 text-[#857ca2]" />
+              <div>
+                <span className="font-medium">Session Generations</span>
+                <p className="text-xs text-[#857ca2] mt-0.5">View question sets from this session</p>
+              </div>
+            </motion.button>
+
+            {/* View Test History */}
+            <motion.button
+              whileTap={{ opacity: 0.6 }}
+              onClick={() => {
+                setMenuOpen(false);
+                handleTestHistoryClick();
+              }}
+              className="w-full text-left p-4 rounded-xl bg-white/5 hover:bg-white/8 transition-colors text-[#ddd6fe] flex items-center gap-3"
             >
-              Test History
-            </button>
+              <Trophy className="w-5 h-5 text-[#857ca2]" />
+              <div>
+                <span className="font-medium">Test History</span>
+                <p className="text-xs text-[#857ca2] mt-0.5">Review past test scores</p>
+              </div>
+            </motion.button>
+
+            {/* New Session */}
+            <motion.button
+              whileTap={{ opacity: 0.6 }}
+              onClick={() => {
+                setMenuOpen(false);
+                resetSession();
+              }}
+              className="w-full text-left p-4 rounded-xl bg-white/5 hover:bg-white/8 transition-colors text-[#ddd6fe] flex items-center gap-3"
+            >
+              <X className="w-5 h-5 text-[#857ca2]" />
+              <div>
+                <span className="font-medium">New Session</span>
+                <p className="text-xs text-[#857ca2] mt-0.5">Start fresh with new content</p>
+              </div>
+            </motion.button>
           </div>
         </div>
       </BottomSheet>

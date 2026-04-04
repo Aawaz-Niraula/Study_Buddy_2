@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, Upload, Camera, X, FileText, Image as ImageIcon, Minus, Plus } from "lucide-react";
 
@@ -60,10 +60,13 @@ export function SessionForm({
 
   const hasInput = text.trim() || attachments.length > 0;
 
-  // Auto-expand step 2 when input exists
-  if (hasInput && !step2Expanded) {
-    setTimeout(() => setStep2Expanded(true), 100);
-  }
+  // Auto-expand step 2 when input exists - using useEffect to avoid render-time side effects
+  useEffect(() => {
+    if (hasInput && !step2Expanded) {
+      const timer = setTimeout(() => setStep2Expanded(true), 100);
+      return () => clearTimeout(timer);
+    }
+  }, [hasInput, step2Expanded]);
 
   return (
     <div className="space-y-4 max-w-2xl mx-auto">

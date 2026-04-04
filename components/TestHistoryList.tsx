@@ -31,9 +31,15 @@ export function TestHistoryList({
 
   if (tests.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <Trophy className="w-12 h-12 text-[#857ca2]/50 mb-3" />
-        <p className="text-[#857ca2] text-sm">No tests taken yet</p>
+      <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+        <div className="p-4 bg-[#a78bfa]/10 rounded-full mb-4">
+          <Trophy className="w-12 h-12 text-[#a78bfa] opacity-70" />
+        </div>
+        <p className="text-[#f2efff] font-medium mb-2">No tests taken yet</p>
+        <p className="text-[#857ca2] text-sm mb-6 max-w-[250px]">
+          Generate questions and take a test to track your progress here
+        </p>
+        <div className="w-full max-w-[200px] h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
       </div>
     );
   }
