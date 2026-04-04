@@ -13,7 +13,7 @@ import { ResultsScreen } from "@/components/ResultsScreen";
 import { TestReviewScreen } from "@/components/TestReviewScreen";
 import { GeneratedQuestionsView } from "@/components/GeneratedQuestionsView";
 import { Sparkles, CircleHelp, X, BookOpen, LayoutPanelLeft, Trophy } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 declare global {
   interface Window {
@@ -429,12 +429,28 @@ export default function Home() {
     setSourceKind(session.source_kind);
     setMode(session.latest_mode ?? "mix");
     setDifficulty(session.latest_difficulty ?? "medium");
-    setText(session.source_payload?.text ?? "");
+    
+    // Only set text if source_kind is "text", otherwise clear it
+    // This prevents showing text in the textarea when the source was a file/image
+    if (session.source_kind === "text") {
+      setText(session.source_payload?.text ?? "");
+    } else {
+      setText("");
+    }
+    
     setAttachments(session.source_payload?.attachments ?? []);
     setGenerations(Array.isArray(session.generations) ? session.generations : []);
     setQuestions(session.latest_generation?.questions ?? null);
     setActiveGenerationId(session.latest_generation?.id ?? null);
-    setTestSubmissions(Array.isArray(session.test_submissions) ? session.test_submissions : []);
+    
+    // Set current session tests but DON'T override global allTestSubmissions
+    const sessionTests = Array.isArray(session.test_submissions) ? session.test_submissions : [];
+    setTestSubmissions(sessionTests.map((t: any) => ({
+      ...t,
+      sessionId: session.id,
+      sessionTitle: session.title,
+    })));
+    
     setUploadStatus("");
     setSessionHistoryOpen(false);
     setTestMode(false);
@@ -791,20 +807,25 @@ export default function Home() {
                   <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] bg-clip-text text-transparent">
                     Study Buddy
                   </h1>
-                  <button
-                    onClick={() => setHelpOpen(true)}
-                    className="p-2 rounded-full hover:bg-white/5 transition-colors"
+                  <motion.button
+                    whileHover={{ scale: 1.1, rotate: 15 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => setHelpOpen(!helpOpen)}
+                    className="p-2 rounded-full hover:bg-white/10 transition-colors"
                     aria-label="Help"
                   >
-                    <CircleHelp className="w-5 h-5 text-[#f9a8d4]" />
-                  </button>
+                    <CircleHelp className={`w-5 h-5 transition-colors ${helpOpen ? 'text-[#a78bfa]' : 'text-[#f9a8d4]'}`} />
+                  </motion.button>
                 </div>
-                <p className="text-[#857ca2] text-sm mb-4">
+                <p className="text-[#857ca2] text-sm mb-3">
                   Turn notes into smart questions with AI
                 </p>
-                <p className="text-[#857ca2] text-xs">
-                  made by aawaz
-                </p>
+                {/* Made by aawaz - highlighted */}
+                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-[#a78bfa]/20 to-[#f9a8d4]/20 border border-[#a78bfa]/30">
+                  <span className="text-xs font-medium bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] bg-clip-text text-transparent">
+                    ✨ made by aawaz
+                  </span>
+                </div>
               </div>
 
               {/* Action Buttons */}
@@ -833,28 +854,56 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Help Modal */}
-            {helpOpen && (
-              <div className="mb-6 p-6 bg-white/5 border border-white/10 rounded-2xl relative">
-                <button
-                  onClick={() => setHelpOpen(false)}
-                  className="absolute top-4 right-4 p-2 rounded-full bg-red-500/20 hover:bg-red-500/30 transition-colors"
-                  aria-label="Close help"
+            {/* Help Modal - Dynamic with Animation */}
+            <AnimatePresence>
+              {helpOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -20, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                  className="mb-6 p-6 bg-gradient-to-br from-[#a78bfa]/10 to-[#f9a8d4]/10 border border-[#a78bfa]/30 rounded-2xl relative backdrop-blur-sm shadow-xl shadow-[#a78bfa]/5"
                 >
-                  <X className="w-4 h-4 text-red-400" />
-                </button>
-                <h3 className="text-sm font-medium text-[#f9a8d4] uppercase tracking-wide mb-3">
-                  How to Use
-                </h3>
-                <div className="text-sm text-[#ddd6fe] leading-relaxed pr-8">
-                  Start one session with only one source type: pasted notes, one PDF, or one or more photos. 
-                  After that, you can change difficulty and question format as many times as you want for that 
-                  same session. Use TAKE TEST to build a test from this session or blend in previous sessions. 
-                  In test mode you answer first, then press SUBMIT TEST and use SEE RESULTS to reveal scoring 
-                  and correct answers. TEST HISTORY opens a sidebar with previous submissions you can reopen anytime.
-                </div>
-              </div>
-            )}
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => setHelpOpen(false)}
+                    className="absolute top-3 right-3 p-2 rounded-full bg-red-500/20 hover:bg-red-500/40 transition-colors"
+                    aria-label="Close help"
+                  >
+                    <X className="w-4 h-4 text-red-400" />
+                  </motion.button>
+                  
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="p-2 rounded-lg bg-[#a78bfa]/20">
+                      <CircleHelp className="w-5 h-5 text-[#a78bfa]" />
+                    </div>
+                    <h3 className="text-lg font-semibold bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] bg-clip-text text-transparent">
+                      How to Use Study Buddy
+                    </h3>
+                  </div>
+                  
+                  <div className="space-y-3 text-sm text-[#ddd6fe] leading-relaxed pr-8">
+                    <div className="flex gap-3">
+                      <span className="text-[#a78bfa] font-bold">1.</span>
+                      <p>Start a session with <strong className="text-[#f9a8d4]">one source type</strong>: pasted notes, a PDF, or photos.</p>
+                    </div>
+                    <div className="flex gap-3">
+                      <span className="text-[#a78bfa] font-bold">2.</span>
+                      <p>Adjust <strong className="text-[#f9a8d4]">difficulty</strong> and <strong className="text-[#f9a8d4]">question format</strong>, then generate questions.</p>
+                    </div>
+                    <div className="flex gap-3">
+                      <span className="text-[#a78bfa] font-bold">3.</span>
+                      <p>Use <strong className="text-[#f9a8d4]">TAKE TEST</strong> to quiz yourself. Answer first, then submit to see results.</p>
+                    </div>
+                    <div className="flex gap-3">
+                      <span className="text-[#a78bfa] font-bold">4.</span>
+                      <p>View test history in the <strong className="text-[#f9a8d4]">right sidebar</strong> to review past attempts anytime.</p>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Session Form */}
             <SessionForm
