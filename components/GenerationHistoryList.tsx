@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { FileText, Image as ImageIcon, Sparkles } from "lucide-react";
+import { Sparkles, FileText, Image as ImageIcon, Clock } from "lucide-react";
 
 interface GenerationItem {
   id: string;
@@ -16,6 +16,8 @@ interface GenerationHistoryListProps {
   activeId: string | null;
   onSelect: (id: string) => void;
   loading: boolean;
+  sessionTitle?: string;
+  sourceKind?: string | null;
 }
 
 export function GenerationHistoryList({
@@ -23,6 +25,8 @@ export function GenerationHistoryList({
   activeId,
   onSelect,
   loading,
+  sessionTitle = "Current Session",
+  sourceKind,
 }: GenerationHistoryListProps) {
   if (loading) {
     return (
@@ -47,15 +51,35 @@ export function GenerationHistoryList({
     );
   }
 
+  const getSourceIcon = () => {
+    if (sourceKind === "pdf") return <FileText className="w-4 h-4 text-[#a78bfa]" />;
+    if (sourceKind === "image") return <ImageIcon className="w-4 h-4 text-[#a78bfa]" />;
+    return <Sparkles className="w-4 h-4 text-[#a78bfa]" />;
+  };
+
   return (
-    <div className="space-y-3">
-      <div className="px-4 py-2">
-        <p className="text-xs text-[#857ca2] uppercase tracking-wide">
-          This Session ({generations.length} generation{generations.length !== 1 ? "s" : ""})
-        </p>
+    <div className="space-y-4">
+      {/* Current Session Header */}
+      <div className="p-4 bg-gradient-to-r from-[#a78bfa]/10 to-[#f9a8d4]/10 border border-[#a78bfa]/20 rounded-xl">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="p-2 bg-[#a78bfa]/20 rounded-lg">
+            {getSourceIcon()}
+          </div>
+          <div className="flex-1">
+            <h4 className="text-sm font-medium text-[#f2efff]">{sessionTitle}</h4>
+            <p className="text-xs text-[#857ca2]">
+              {generations.length} generation{generations.length !== 1 ? "s" : ""}
+            </p>
+          </div>
+        </div>
       </div>
 
+      {/* Generation List */}
       <div className="space-y-2">
+        <p className="text-xs text-[#857ca2] uppercase tracking-wide px-2">
+          Question Sets
+        </p>
+        
         {generations.map((gen, index) => {
           const isActive = gen.id === activeId;
           const date = new Date(gen.created_at);
@@ -97,7 +121,10 @@ export function GenerationHistoryList({
                     >
                       Generation #{generations.length - index}
                     </span>
-                    <span className="text-xs text-[#857ca2]">{timeStr}</span>
+                    <div className="flex items-center gap-1 text-xs text-[#857ca2]">
+                      <Clock className="w-3 h-3" />
+                      {timeStr}
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap">
@@ -110,7 +137,7 @@ export function GenerationHistoryList({
                     <span className="text-xs text-[#857ca2] truncate">
                       {gen.mode === "mix"
                         ? "Mixed"
-                        : gen.mode.replace("-", " ").toUpperCase()}
+                        : gen.mode.replace("-", " ").replace(/\b\w/g, l => l.toUpperCase())}
                     </span>
                   </div>
                 </div>

@@ -851,7 +851,7 @@ export default function Home() {
         isOpen={sessionHistoryOpen}
         onClose={() => setSessionHistoryOpen(false)}
         side="left"
-        title="Session Generations"
+        title="Sessions"
       >
         <GenerationHistoryList
           generations={generationItems}
@@ -867,6 +867,8 @@ export default function Home() {
             }
           }}
           loading={false}
+          sessionTitle={sessionTitle}
+          sourceKind={sourceKind}
         />
       </Sidebar>
 

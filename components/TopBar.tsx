@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, MoreVertical, FlaskConical, FolderOpen } from "lucide-react";
+import { Clock, MoreVertical, FolderOpen } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface TopBarProps {
@@ -14,7 +14,7 @@ export function TopBar({ onTestHistoryClick, onSessionHistoryClick, onMenuClick 
     <motion.div
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="fixed top-0 left-0 right-0 z-30 px-4 py-3 bg-gradient-to-b from-[#06060b] to-transparent backdrop-blur-sm"
+      className="fixed top-0 left-0 right-0 z-30 px-4 py-2 bg-gradient-to-b from-[#06060b] to-transparent backdrop-blur-sm"
     >
       <div className="max-w-5xl mx-auto flex items-center justify-between">
         {/* App Name */}
@@ -22,36 +22,39 @@ export function TopBar({ onTestHistoryClick, onSessionHistoryClick, onMenuClick 
           Study Buddy
         </h1>
 
-        {/* Icon Buttons */}
-        <div className="flex items-center gap-2">
+        {/* Icon Buttons with Labels */}
+        <div className="flex items-center gap-1">
           {/* Session History (Left Sidebar) */}
           <motion.button
             whileTap={{ opacity: 0.6 }}
             onClick={onSessionHistoryClick}
-            className="p-3 rounded-full hover:bg-white/5 transition-colors min-w-[48px] min-h-[48px] flex items-center justify-center"
+            className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl hover:bg-white/5 transition-colors min-w-[56px]"
             aria-label="Session history"
           >
             <FolderOpen className="w-5 h-5 text-[#ddd6fe]" />
+            <span className="text-[10px] text-[#857ca2]">Sessions</span>
           </motion.button>
 
           {/* Test History (Right Sidebar) */}
           <motion.button
             whileTap={{ opacity: 0.6 }}
             onClick={onTestHistoryClick}
-            className="p-3 rounded-full hover:bg-white/5 transition-colors min-w-[48px] min-h-[48px] flex items-center justify-center"
+            className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl hover:bg-white/5 transition-colors min-w-[56px]"
             aria-label="Test history"
           >
             <Clock className="w-5 h-5 text-[#ddd6fe]" />
+            <span className="text-[10px] text-[#857ca2]">Tests</span>
           </motion.button>
 
           {/* Menu */}
           <motion.button
             whileTap={{ opacity: 0.6 }}
             onClick={onMenuClick}
-            className="p-3 rounded-full hover:bg-white/5 transition-colors min-w-[48px] min-h-[48px] flex items-center justify-center"
+            className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl hover:bg-white/5 transition-colors min-w-[56px]"
             aria-label="More options"
           >
             <MoreVertical className="w-5 h-5 text-[#ddd6fe]" />
+            <span className="text-[10px] text-[#857ca2]">Menu</span>
           </motion.button>
         </div>
       </div>

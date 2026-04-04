@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Trophy, Clock as ClockIcon } from "lucide-react";
+import { Trophy, Clock as ClockIcon, TrendingUp } from "lucide-react";
 
 export interface TestSubmissionItem {
   id: string;
@@ -24,7 +24,7 @@ export function TestHistoryList({
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="text-[#857ca2] text-sm">Loading test history...</div>
+        <div className="w-8 h-8 border-2 border-[#a78bfa] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -50,14 +50,46 @@ export function TestHistoryList({
     return { bg: "bg-red-500/10", border: "border-red-500/40", text: "text-red-400", badge: "bg-red-500" };
   };
 
+  // Calculate average score
+  const avgScore = tests.length > 0 
+    ? Math.round(tests.reduce((sum, t) => sum + (t.score / t.total) * 100, 0) / tests.length)
+    : 0;
+
   return (
-    <div className="space-y-3">
-      {tests.map((test, idx) => {
-        const percentage = Math.round((test.score / test.total) * 100);
-        const colors = getScoreColor(percentage);
-        const date = new Date(test.created_at).toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
+    <div className="space-y-4">
+      {/* Stats Header */}
+      <div className="p-4 bg-gradient-to-r from-[#a78bfa]/10 to-[#f9a8d4]/10 border border-[#a78bfa]/20 rounded-xl">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-[#a78bfa]/20 rounded-lg">
+              <TrendingUp className="w-4 h-4 text-[#a78bfa]" />
+            </div>
+            <div>
+              <p className="text-xs text-[#857ca2]">Tests Taken</p>
+              <p className="text-lg font-bold text-[#f2efff]">{tests.length}</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-[#857ca2]">Avg Score</p>
+            <p className={`text-lg font-bold ${avgScore >= 70 ? 'text-green-400' : avgScore >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+              {avgScore}%
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Test List */}
+      <div className="space-y-2">
+        <p className="text-xs text-[#857ca2] uppercase tracking-wide px-2">
+          Recent Tests
+        </p>
+        
+        {tests.slice().reverse().map((test, idx) => {
+          const percentage = Math.round((test.score / test.total) * 100);
+          const colors = getScoreColor(percentage);
+          const date = new Date(test.created_at).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
           year: "numeric",
         });
         const time = new Date(test.created_at).toLocaleTimeString("en-US", {
@@ -87,6 +119,9 @@ export function TestHistoryList({
                 <div className={`text-lg font-bold ${colors.text} mb-1`}>
                   {test.score}/{test.total} — {percentage}%
                 </div>
+                <p className="text-xs text-[#857ca2]">
+                  {test.total} question{test.total !== 1 ? "s" : ""}
+                </p>
               </div>
 
               {/* Badge */}
@@ -99,6 +134,7 @@ export function TestHistoryList({
           </motion.button>
         );
       })}
+      </div>
     </div>
   );
 }
