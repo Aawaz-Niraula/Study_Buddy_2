@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useCallback, useEffect } from "react";
 import { TopBar } from "@/components/TopBar";
+import GreetingBanner from "@/components/GreetingBanner";
 import { Sidebar } from "@/components/Sidebar";
 import { BottomSheet } from "@/components/BottomSheet";
 import { SessionForm } from "@/components/SessionForm";
@@ -14,6 +15,7 @@ import { TestReviewScreen } from "@/components/TestReviewScreen";
 import { GeneratedQuestionsView } from "@/components/GeneratedQuestionsView";
 import { Sparkles, CircleHelp, X, BookOpen, LayoutPanelLeft, Trophy } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "@/lib/useAuth";
 
 declare global {
   interface Window {
@@ -821,6 +823,9 @@ export default function Home() {
         onSessionHistoryClick={handleSessionHistoryClick}
         onMenuClick={handleMenuClick} 
       />
+
+      {/* Greeting Banner (shows once per session) */}
+      <GreetingBanner />
 
       {/* Main Content */}
       <div className="pt-20 px-4 pb-24 max-w-3xl mx-auto">

@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, MoreVertical, FolderOpen, User, LogOut } from "lucide-react";
+import { Clock, MoreVertical, FolderOpen, User as UserIcon, LogOut } from "lucide-react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { useAuth } from "@/lib/useAuth";
@@ -13,6 +13,8 @@ interface TopBarProps {
 
 export function TopBar({ onTestHistoryClick, onSessionHistoryClick, onMenuClick }: TopBarProps) {
   const { user, loading, signOut } = useAuth();
+
+  const avatarUrl = (user as any)?.user_metadata?.avatar_url || (user as any)?.user_metadata?.picture || null;
 
   return (
     <motion.div
@@ -61,27 +63,29 @@ export function TopBar({ onTestHistoryClick, onSessionHistoryClick, onMenuClick 
             <span className="text-[10px] text-[#857ca2]">Menu</span>
           </motion.button>
 
-          {/* Auth Button */}
+          {/* Auth / Avatar */}
           {!loading && (
             user ? (
-              <motion.button
-                whileTap={{ opacity: 0.6 }}
-                onClick={signOut}
-                className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl hover:bg-white/5 transition-colors min-w-[56px]"
-                aria-label="Sign out"
-              >
-                <LogOut className="w-5 h-5 text-[#ddd6fe]" />
-                <span className="text-[10px] text-[#857ca2] truncate max-w-[50px]">
-                  {user.email?.split('@')[0] || 'Account'}
-                </span>
-              </motion.button>
+              <Link href="/profile">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-xl hover:bg-white/5 transition-colors">
+                  {avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={avatarUrl} alt="avatar" className="w-8 h-8 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-8 h-8 flex items-center justify-center bg-white/5 rounded-full">
+                      <UserIcon className="w-5 h-5 text-[#a78bfa]" />
+                    </div>
+                  )}
+                  <span className="text-[12px] text-[#857ca2] truncate max-w-[120px]">{user.email?.split('@')[0]}</span>
+                </div>
+              </Link>
             ) : (
               <Link href="/login">
                 <motion.div
                   whileTap={{ opacity: 0.6 }}
                   className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl hover:bg-white/5 transition-colors min-w-[56px]"
                 >
-                  <User className="w-5 h-5 text-[#a78bfa]" />
+                  <UserIcon className="w-5 h-5 text-[#a78bfa]" />
                   <span className="text-[10px] text-[#a78bfa]">Sign In</span>
                 </motion.div>
               </Link>
