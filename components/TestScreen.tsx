@@ -71,7 +71,7 @@ export function TestScreen({
   }, [timeLeft, onSubmit]);
 
   const getTimerColor = () => {
-    if (timeLeft === null || timerMinutes === null) return "text-green-400";
+    if (timeLeft === null || !timerMinutes) return "text-green-400";
     
     const totalSeconds = timerMinutes * 60;
     const percentRemaining = (timeLeft / totalSeconds) * 100;
