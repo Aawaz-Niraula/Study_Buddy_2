@@ -800,6 +800,34 @@ export default function Home() {
           <>
             {/* Hero Section */}
             <div className="mb-8">
+              {/* Top Row: Made by aawaz (left) + NEW SESSION (right) */}
+              <div className="flex items-center justify-between mb-4">
+                {/* Made by aawaz - highlighted */}
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gradient-to-r from-[#a78bfa]/20 to-[#f9a8d4]/20 border border-[#a78bfa]/30">
+                  <span className="text-xs font-medium bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] bg-clip-text text-transparent">
+                    ✨ made by aawaz
+                  </span>
+                </div>
+
+                {/* NEW SESSION Button - Top Right */}
+                <motion.button
+                  whileTap={{ opacity: 0.6 }}
+                  onClick={() => {
+                    // Check if current session is empty
+                    const hasContent = text.trim() || attachments.length > 0 || generations.length > 0;
+                    if (!hasContent && !sessionId) {
+                      setError("Use the current session first before starting a new session");
+                      return;
+                    }
+                    resetSession();
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-xs tracking-wide bg-white/5 border border-white/10 text-[#ddd6fe] hover:bg-white/8 transition-all"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  NEW SESSION
+                </motion.button>
+              </div>
+
               {/* Title and Help - Centered */}
               <div className="text-center">
                 <div className="flex items-center justify-center gap-3 mb-3">
@@ -817,31 +845,14 @@ export default function Home() {
                     <CircleHelp className={`w-5 h-5 transition-colors ${helpOpen ? 'text-[#a78bfa]' : 'text-[#f9a8d4]'}`} />
                   </motion.button>
                 </div>
-                <p className="text-[#857ca2] text-sm mb-3">
+                <p className="text-[#857ca2] text-sm">
                   Turn notes into smart questions with AI
                 </p>
-                {/* Made by aawaz - highlighted */}
-                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-[#a78bfa]/20 to-[#f9a8d4]/20 border border-[#a78bfa]/30">
-                  <span className="text-xs font-medium bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] bg-clip-text text-transparent">
-                    ✨ made by aawaz
-                  </span>
-                </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="mt-6 flex flex-wrap justify-center gap-3">
-                {/* NEW SESSION Button */}
-                <motion.button
-                  whileTap={{ opacity: 0.6 }}
-                  onClick={resetSession}
-                  className="inline-flex items-center gap-2 min-h-[48px] px-6 py-3 rounded-2xl font-medium text-sm tracking-wide bg-white/5 border border-white/10 text-[#ddd6fe] hover:bg-white/8 transition-all"
-                >
-                  <X className="w-4 h-4" />
-                  NEW SESSION
-                </motion.button>
-
-                {/* TAKE TEST Button - only show if has questions */}
-                {hasResults && (
+              {/* TAKE TEST Button - Centered, only show if has questions */}
+              {hasResults && (
+                <div className="mt-6 flex justify-center">
                   <motion.button
                     whileTap={{ opacity: 0.6 }}
                     onClick={() => setTestOptionsOpen(true)}
@@ -850,8 +861,8 @@ export default function Home() {
                     <BookOpen className="w-4 h-4" />
                     TAKE TEST
                   </motion.button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
             {/* Help Modal - Dynamic with Animation */}
