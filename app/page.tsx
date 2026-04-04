@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import { TopBar } from "@/components/TopBar";
 import { Sidebar } from "@/components/Sidebar";
 import { BottomSheet } from "@/components/BottomSheet";
 import { SessionForm } from "@/components/SessionForm";
 import { TestOptionsSheet } from "@/components/TestOptionsSheet";
-import { GenerationHistoryList } from "@/components/GenerationHistoryList";
+import { SessionHistoryList } from "@/components/SessionHistoryList";
 import { TestHistoryList, type TestSubmissionItem } from "@/components/TestHistoryList";
 import { TestScreen } from "@/components/TestScreen";
 import { ResultsScreen } from "@/components/ResultsScreen";
@@ -79,6 +79,8 @@ type TestSubmission = {
   answers: TestAnswers;
   questions: QuestionSet;
   shortAnswerEvaluations?: ShortAnswerEvaluation[];
+  sessionId?: string;
+  sessionTitle?: string;
 };
 
 let pdfJsLoader: Promise<void> | null = null;
@@ -163,7 +165,8 @@ export default function Home() {
   const [testAnswers, setTestAnswers] = useState<TestAnswers>({});
   const [testSubmitted, setTestSubmitted] = useState(false);
   const [testScore, setTestScore] = useState<{ score: number; total: number } | null>(null);
-  const [testSubmissions, setTestSubmissions] = useState<TestSubmission[]>([]);
+  const [testSubmissions, setTestSubmissions] = useState<TestSubmission[]>([]); // Current session tests
+  const [allTestSubmissions, setAllTestSubmissions] = useState<TestSubmission[]>([]); // All tests globally
   const [activeTestSubmissionId, setActiveTestSubmissionId] = useState<string | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [showResults, setShowResults] = useState(false);
@@ -210,16 +213,20 @@ export default function Home() {
     [generations]
   );
 
-  const testHistoryItems: TestSubmissionItem[] = useMemo(
-    () =>
-      testSubmissions.map((submission) => ({
-        id: submission.id,
-        created_at: submission.created_at,
-        score: submission.score,
-        total: submission.total,
-      })),
-    [testSubmissions]
-  );
+  // Combine all tests: current session tests + all historical tests (deduplicated)
+  const testHistoryItems: TestSubmissionItem[] = useMemo(() => {
+    const currentSessionIds = new Set(testSubmissions.map(t => t.id));
+    const historicalTests = allTestSubmissions.filter(t => !currentSessionIds.has(t.id));
+    const combined = [...testSubmissions, ...historicalTests];
+    
+    return combined.map((submission) => ({
+      id: submission.id,
+      created_at: submission.created_at,
+      score: submission.score,
+      total: submission.total,
+      sessionTitle: submission.sessionTitle,
+    }));
+  }, [testSubmissions, allTestSubmissions]);
 
   // Helper functions
   const resetSession = () => {
@@ -238,7 +245,8 @@ export default function Home() {
     setTestAnswers({});
     setTestSubmitted(false);
     setTestScore(null);
-    setTestSubmissions([]);
+    setTestSubmissions([]); // Clear current session tests only
+    // Don't clear allTestSubmissions - keep global test history
     setActiveTestSubmissionId(null);
     setCurrentQuestionIndex(0);
     setShowResults(false);
@@ -254,10 +262,33 @@ export default function Home() {
       const res = await fetch("/api/generate");
       const data = await res.json().catch(() => ({}));
       setHistory(Array.isArray(data.sessions) ? data.sessions : []);
+      
+      // Also collect all test submissions from all sessions
+      const allTests: TestSubmission[] = [];
+      if (Array.isArray(data.sessions)) {
+        for (const session of data.sessions) {
+          if (Array.isArray(session.test_submissions)) {
+            for (const test of session.test_submissions) {
+              allTests.push({
+                ...test,
+                sessionId: session.id,
+                sessionTitle: session.title,
+              });
+            }
+          }
+        }
+      }
+      setAllTestSubmissions(allTests);
     } finally {
       setHistoryLoading(false);
     }
   };
+
+  // Load history on mount
+  useEffect(() => {
+    loadHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleFilesAdded = async (
     event: React.ChangeEvent<HTMLInputElement>,
@@ -524,6 +555,8 @@ export default function Home() {
       answers: testAnswers,
       questions: testQuestions,
       shortAnswerEvaluations,
+      sessionId: sessionId || undefined,
+      sessionTitle: sessionTitle || "Unknown Session",
     };
 
     const res = await fetch("/api/generate", {
@@ -539,6 +572,8 @@ export default function Home() {
     }
 
     setTestSubmissions((current) => [...current, payload]);
+    // Also add to global test history
+    setAllTestSubmissions((current) => [...current, payload]);
     setTestSubmitted(true);
     setTestScore({ score, total });
     setActiveTestSubmissionId(payload.id);
@@ -547,7 +582,11 @@ export default function Home() {
   };
 
   const openTestSubmission = (testId: string) => {
-    const submission = testSubmissions.find((t) => t.id === testId);
+    // Look in current session tests first, then in all historical tests
+    let submission = testSubmissions.find((t) => t.id === testId);
+    if (!submission) {
+      submission = allTestSubmissions.find((t) => t.id === testId);
+    }
     if (!submission) return;
 
     setTestHistoryOpen(false);
@@ -656,7 +695,11 @@ export default function Home() {
 
   // Render different screens
   if (reviewTestId) {
-    const submission = testSubmissions.find((t) => t.id === reviewTestId);
+    // Look in current session tests first, then in all historical tests
+    let submission = testSubmissions.find((t) => t.id === reviewTestId);
+    if (!submission) {
+      submission = allTestSubmissions.find((t) => t.id === reviewTestId);
+    }
     if (submission) {
       const reviewQuestions = buildReviewQuestions(
         submission.questions,
@@ -846,17 +889,23 @@ export default function Home() {
         )}
       </div>
 
-      {/* Session History Sidebar (LEFT) - Shows generations within current session */}
+      {/* Session History Sidebar (LEFT) - Shows current session + previous sessions */}
       <Sidebar
         isOpen={sessionHistoryOpen}
         onClose={() => setSessionHistoryOpen(false)}
         side="left"
         title="Sessions"
       >
-        <GenerationHistoryList
-          generations={generationItems}
-          activeId={activeGenerationId}
-          onSelect={(id) => {
+        <SessionHistoryList
+          sessions={history}
+          currentSessionId={sessionId}
+          currentSessionTitle={sessionTitle}
+          currentGenerations={generationItems}
+          activeGenerationId={activeGenerationId}
+          onSelectSession={(id) => {
+            openSession(id);
+          }}
+          onSelectGeneration={(id) => {
             const gen = generations.find((g) => g.id === id);
             if (gen) {
               setActiveGenerationId(id);
@@ -866,9 +915,7 @@ export default function Home() {
               setSessionHistoryOpen(false);
             }
           }}
-          loading={false}
-          sessionTitle={sessionTitle}
-          sourceKind={sourceKind}
+          loading={historyLoading}
         />
       </Sidebar>
 
@@ -882,7 +929,7 @@ export default function Home() {
         <TestHistoryList
           tests={testHistoryItems}
           onSelectTest={openTestSubmission}
-          loading={false}
+          loading={historyLoading}
         />
       </Sidebar>
 

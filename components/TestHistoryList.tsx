@@ -8,6 +8,7 @@ export interface TestSubmissionItem {
   created_at: string;
   score: number;
   total: number;
+  sessionTitle?: string;
 }
 
 interface TestHistoryListProps {
@@ -110,6 +111,11 @@ export function TestHistoryList({
             <div className="flex items-start justify-between gap-3">
               {/* Content */}
               <div className="flex-1">
+                {test.sessionTitle && (
+                  <p className="text-xs text-[#a78bfa] mb-1 truncate">
+                    {test.sessionTitle}
+                  </p>
+                )}
                 <div className="flex items-center gap-2 mb-2">
                   <ClockIcon className="w-4 h-4 text-[#857ca2]" />
                   <span className="text-xs text-[#857ca2]">
