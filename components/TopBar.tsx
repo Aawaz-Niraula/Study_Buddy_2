@@ -1,7 +1,9 @@
 "use client";
 
-import { Clock, MoreVertical, FolderOpen } from "lucide-react";
+import { Clock, MoreVertical, FolderOpen, User, LogOut } from "lucide-react";
 import { motion } from "framer-motion";
+import Link from "next/link";
+import { useAuth } from "@/lib/useAuth";
 
 interface TopBarProps {
   onTestHistoryClick: () => void;
@@ -10,6 +12,8 @@ interface TopBarProps {
 }
 
 export function TopBar({ onTestHistoryClick, onSessionHistoryClick, onMenuClick }: TopBarProps) {
+  const { user, loading, signOut } = useAuth();
+
   return (
     <motion.div
       initial={{ opacity: 0, y: -10 }}
@@ -56,6 +60,33 @@ export function TopBar({ onTestHistoryClick, onSessionHistoryClick, onMenuClick 
             <MoreVertical className="w-5 h-5 text-[#ddd6fe]" />
             <span className="text-[10px] text-[#857ca2]">Menu</span>
           </motion.button>
+
+          {/* Auth Button */}
+          {!loading && (
+            user ? (
+              <motion.button
+                whileTap={{ opacity: 0.6 }}
+                onClick={signOut}
+                className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl hover:bg-white/5 transition-colors min-w-[56px]"
+                aria-label="Sign out"
+              >
+                <LogOut className="w-5 h-5 text-[#ddd6fe]" />
+                <span className="text-[10px] text-[#857ca2] truncate max-w-[50px]">
+                  {user.email?.split('@')[0] || 'Account'}
+                </span>
+              </motion.button>
+            ) : (
+              <Link href="/login">
+                <motion.div
+                  whileTap={{ opacity: 0.6 }}
+                  className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl hover:bg-white/5 transition-colors min-w-[56px]"
+                >
+                  <User className="w-5 h-5 text-[#a78bfa]" />
+                  <span className="text-[10px] text-[#a78bfa]">Sign In</span>
+                </motion.div>
+              </Link>
+            )
+          )}
         </div>
       </div>
     </motion.div>
