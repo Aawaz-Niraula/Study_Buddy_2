@@ -1,9 +1,9 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowLeft, ChevronRight, ChevronLeft, X } from "lucide-react";
+import { ArrowLeft, ChevronRight, ChevronLeft, X, Clock } from "lucide-react";
 import { BottomSheet } from "./BottomSheet";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface Question {
   question?: string;
@@ -24,6 +24,7 @@ interface TestScreenProps {
   onExit: () => void;
   isLastQuestion: boolean;
   onSubmit: () => void;
+  timerMinutes?: number | null;
 }
 
 export function TestScreen({
@@ -38,11 +39,53 @@ export function TestScreen({
   onExit,
   isLastQuestion,
   onSubmit,
+  timerMinutes,
 }: TestScreenProps) {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [timeLeft, setTimeLeft] = useState<number | null>(
+    timerMinutes ? timerMinutes * 60 : null
+  );
+  const [timeIsUp, setTimeIsUp] = useState(false);
 
   const question = questions[currentIndex];
   const progress = ((currentIndex + 1) / totalQuestions) * 100;
+
+  // Timer logic
+  useEffect(() => {
+    if (timeLeft === null) return;
+
+    if (timeLeft <= 0) {
+      setTimeIsUp(true);
+      // Show "Time is up!" briefly, then auto-submit
+      setTimeout(() => {
+        onSubmit();
+      }, 1500);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => (prev !== null ? prev - 1 : null));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [timeLeft, onSubmit]);
+
+  const getTimerColor = () => {
+    if (timeLeft === null || timerMinutes === null) return "text-green-400";
+    
+    const totalSeconds = timerMinutes * 60;
+    const percentRemaining = (timeLeft / totalSeconds) * 100;
+
+    if (timeLeft <= 10) return "text-red-400";
+    if (percentRemaining < 50) return "text-yellow-400";
+    return "text-green-400";
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
 
   const handleExit = () => {
     setShowExitConfirm(true);
@@ -62,14 +105,32 @@ export function TestScreen({
             <div className="text-xs text-[#857ca2] uppercase tracking-wider">
               Test Mode
             </div>
-            <motion.button
-              whileTap={{ opacity: 0.6 }}
-              onClick={handleExit}
-              className="p-2 rounded-full hover:bg-white/5 transition-colors"
-              aria-label="Exit test"
-            >
-              <X className="w-5 h-5 text-[#f87171]" />
-            </motion.button>
+            <div className="flex items-center gap-3">
+              {/* Timer Display */}
+              {timeLeft !== null && (
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border ${
+                    timeLeft <= 10 ? "border-red-500/50" : "border-white/10"
+                  }`}
+                >
+                  <Clock className={`w-4 h-4 ${getTimerColor()}`} />
+                  <span className={`text-sm font-mono font-bold ${getTimerColor()}`}>
+                    {timeIsUp ? "Time is up!" : formatTime(timeLeft)}
+                  </span>
+                </motion.div>
+              )}
+              
+              <motion.button
+                whileTap={{ opacity: 0.6 }}
+                onClick={handleExit}
+                className="p-2 rounded-full hover:bg-white/5 transition-colors"
+                aria-label="Exit test"
+              >
+                <X className="w-5 h-5 text-[#f87171]" />
+              </motion.button>
+            </div>
           </div>
 
           {/* Progress */}

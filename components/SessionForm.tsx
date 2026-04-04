@@ -61,9 +61,8 @@ export function SessionForm({
   const hasInput = text.trim() || attachments.length > 0;
 
   // Auto-expand step 2 when input exists
-  const shouldExpandStep2 = hasInput && !step2Expanded;
-  if (shouldExpandStep2) {
-    setStep2Expanded(true);
+  if (hasInput && !step2Expanded) {
+    setTimeout(() => setStep2Expanded(true), 100);
   }
 
   return (

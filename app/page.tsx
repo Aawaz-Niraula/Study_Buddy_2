@@ -12,7 +12,7 @@ import { TestHistoryList, type TestSubmissionItem } from "@/components/TestHisto
 import { TestScreen } from "@/components/TestScreen";
 import { ResultsScreen } from "@/components/ResultsScreen";
 import { TestReviewScreen } from "@/components/TestReviewScreen";
-import { Sparkles } from "lucide-react";
+import { Sparkles, CircleHelp, X } from "lucide-react";
 
 declare global {
   interface Window {
@@ -166,6 +166,7 @@ export default function Home() {
   const [activeTestSubmissionId, setActiveTestSubmissionId] = useState<string | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [showResults, setShowResults] = useState(false);
+  const [timerMinutes, setTimerMinutes] = useState<number | null>(null);
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -179,6 +180,7 @@ export default function Home() {
   const [history, setHistory] = useState<SessionListItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [reviewTestId, setReviewTestId] = useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   // Computed values
   const hasResults = !!(
@@ -217,6 +219,7 @@ export default function Home() {
     setCurrentQuestionIndex(0);
     setShowResults(false);
     setReviewTestId(null);
+    setTimerMinutes(null);
   };
 
   const loadHistory = async () => {
@@ -395,7 +398,7 @@ export default function Home() {
     }
   };
 
-  const startTest = async (scope: string) => {
+  const startTest = async (scope: string, timer: number | null) => {
     if (!sessionId) {
       setError("Generate at least one question set in this session before taking a test.");
       return;
@@ -427,6 +430,7 @@ export default function Home() {
       setTestHistoryOpen(false);
       setActiveTestSubmissionId(null);
       setCurrentQuestionIndex(0);
+      setTimerMinutes(timer);
       setTestMode(true);
     } catch (err: any) {
       setError(err.message || "Could not generate test.");
@@ -691,9 +695,11 @@ export default function Home() {
           setTestQuestions(null);
           setTestAnswers({});
           setCurrentQuestionIndex(0);
+          setTimerMinutes(null);
         }}
         isLastQuestion={currentQuestionIndex === flatQuestions.length - 1}
         onSubmit={submitTest}
+        timerMinutes={timerMinutes}
       />
     );
   }
@@ -703,25 +709,60 @@ export default function Home() {
       {/* Top Bar */}
       <TopBar onHistoryClick={handleTestHistoryClick} onMenuClick={handleMenuClick} />
 
-      {/* Context-Aware Primary Button */}
-      <ContextAwareButton state={getButtonState()} onClick={handleContextButtonClick} />
-
       {/* Main Content */}
-      <div className="pt-32 px-4 pb-24 max-w-3xl mx-auto">
+      <div className="pt-20 px-4 pb-24 max-w-3xl mx-auto">
         {!testMode && !showResults && (
           <>
             {/* Hero Section */}
-            <div className="text-center mb-12">
-              <div className="flex items-center justify-center gap-2 mb-4">
+            <div className="text-center mb-8">
+              <div className="flex items-center justify-center gap-3 mb-3">
                 <Sparkles className="w-6 h-6 text-[#a78bfa]" />
                 <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] bg-clip-text text-transparent">
                   Study Buddy
                 </h1>
+                <button
+                  onClick={() => setHelpOpen(true)}
+                  className="p-2 rounded-full hover:bg-white/5 transition-colors"
+                  aria-label="Help"
+                >
+                  <CircleHelp className="w-5 h-5 text-[#f9a8d4]" />
+                </button>
               </div>
-              <p className="text-[#857ca2] text-sm">
+              <p className="text-[#857ca2] text-sm mb-4">
                 Turn notes into smart questions with AI
               </p>
+              <p className="text-[#857ca2] text-xs">
+                made by aawaz
+              </p>
             </div>
+
+            {/* Context-Aware Primary Button - scrolls with content */}
+            <div className="mb-6">
+              <ContextAwareButton state={getButtonState()} onClick={handleContextButtonClick} />
+            </div>
+
+            {/* Help Modal */}
+            {helpOpen && (
+              <div className="mb-6 p-6 bg-white/5 border border-white/10 rounded-2xl relative">
+                <button
+                  onClick={() => setHelpOpen(false)}
+                  className="absolute top-4 right-4 p-2 rounded-full bg-red-500/20 hover:bg-red-500/30 transition-colors"
+                  aria-label="Close help"
+                >
+                  <X className="w-4 h-4 text-red-400" />
+                </button>
+                <h3 className="text-sm font-medium text-[#f9a8d4] uppercase tracking-wide mb-3">
+                  How to Use
+                </h3>
+                <div className="text-sm text-[#ddd6fe] leading-relaxed pr-8">
+                  Start one session with only one source type: pasted notes, one PDF, or one or more photos. 
+                  After that, you can change difficulty and question format as many times as you want for that 
+                  same session. Use TAKE TEST to build a test from this session or blend in previous sessions. 
+                  In test mode you answer first, then press SUBMIT TEST and use SEE RESULTS to reveal scoring 
+                  and correct answers. TEST HISTORY opens a sidebar with previous submissions you can reopen anytime.
+                </div>
+              </div>
+            )}
 
             {/* Session Form */}
             <SessionForm
@@ -795,9 +836,9 @@ export default function Home() {
       {/* Test Options Bottom Sheet */}
       <BottomSheet isOpen={testOptionsOpen} onClose={() => setTestOptionsOpen(false)}>
         <TestOptionsSheet
-          onSelect={(optionId) => {
+          onSelect={(optionId, timerMins) => {
             setTestOptionsOpen(false);
-            startTest(optionId);
+            startTest(optionId, timerMins);
           }}
         />
       </BottomSheet>
