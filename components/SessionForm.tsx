@@ -168,7 +168,6 @@ export function SessionForm({
         <button
           onClick={() => setStep2Expanded(!step2Expanded)}
           className="w-full p-6 flex items-center justify-between hover:bg-white/5 transition-colors"
-          disabled={!hasInput}
         >
           <div className="flex items-center gap-3">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm ${hasInput ? "bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4]" : "bg-white/10"}`}>

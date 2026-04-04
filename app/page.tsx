@@ -714,31 +714,34 @@ export default function Home() {
         {!testMode && !showResults && (
           <>
             {/* Hero Section */}
-            <div className="text-center mb-8">
-              <div className="flex items-center justify-center gap-3 mb-3">
-                <Sparkles className="w-6 h-6 text-[#a78bfa]" />
-                <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] bg-clip-text text-transparent">
-                  Study Buddy
-                </h1>
-                <button
-                  onClick={() => setHelpOpen(true)}
-                  className="p-2 rounded-full hover:bg-white/5 transition-colors"
-                  aria-label="Help"
-                >
-                  <CircleHelp className="w-5 h-5 text-[#f9a8d4]" />
-                </button>
+            <div className="mb-8">
+              {/* Title and Help - Centered */}
+              <div className="text-center">
+                <div className="flex items-center justify-center gap-3 mb-3">
+                  <Sparkles className="w-6 h-6 text-[#a78bfa]" />
+                  <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] bg-clip-text text-transparent">
+                    Study Buddy
+                  </h1>
+                  <button
+                    onClick={() => setHelpOpen(true)}
+                    className="p-2 rounded-full hover:bg-white/5 transition-colors"
+                    aria-label="Help"
+                  >
+                    <CircleHelp className="w-5 h-5 text-[#f9a8d4]" />
+                  </button>
+                </div>
+                <p className="text-[#857ca2] text-sm mb-4">
+                  Turn notes into smart questions with AI
+                </p>
+                <p className="text-[#857ca2] text-xs">
+                  made by aawaz
+                </p>
               </div>
-              <p className="text-[#857ca2] text-sm mb-4">
-                Turn notes into smart questions with AI
-              </p>
-              <p className="text-[#857ca2] text-xs">
-                made by aawaz
-              </p>
-            </div>
 
-            {/* Context-Aware Primary Button - scrolls with content */}
-            <div className="mb-6">
-              <ContextAwareButton state={getButtonState()} onClick={handleContextButtonClick} />
+              {/* Context-Aware Primary Button - left on mobile, below subtitle on desktop */}
+              <div className="mt-6 md:text-center">
+                <ContextAwareButton state={getButtonState()} onClick={handleContextButtonClick} />
+              </div>
             </div>
 
             {/* Help Modal */}

@@ -35,7 +35,7 @@ export function ContextAwareButton({ state, onClick }: ContextAwareButtonProps) 
     <motion.button
       whileTap={{ opacity: 0.6 }}
       onClick={onClick}
-      className={`inline-flex items-center gap-2 min-h-[48px] px-6 py-3 rounded-2xl font-medium text-sm tracking-wide transition-all duration-300 mb-6 ${
+      className={`inline-flex items-center gap-2 min-h-[48px] px-6 py-3 rounded-2xl font-medium text-sm tracking-wide transition-all duration-300 ${
         glow
           ? "bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] text-white shadow-lg shadow-purple-500/50 animate-pulse"
           : "bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] text-white"
