@@ -126,16 +126,24 @@ async function ensureSchema(db: ReturnType<typeof createClient> | null) {
         latest_difficulty TEXT NOT NULL
       )`);
       await db.execute(`CREATE INDEX IF NOT EXISTS idx_app_sessions_updated_at ON app_sessions(updated_at DESC)`);
-      await db.execute(`CREATE INDEX IF NOT EXISTS idx_app_sessions_user_id ON app_sessions(user_id)`);
-      // Add user_id column if missing (for existing tables)
+      // Legacy DBs: add columns BEFORE any index on user_id (index on missing column breaks migration)
       try {
         await db.execute(`ALTER TABLE app_sessions ADD COLUMN user_id TEXT`);
-      } catch {}
-      // Add test_submissions_json column if missing
+      } catch {
+        /* duplicate column */
+      }
       try {
-        await db.execute(`ALTER TABLE app_sessions ADD COLUMN test_submissions_json TEXT NOT NULL DEFAULT '[]'`);
-      } catch {}
-    })();
+        await db.execute(
+          `ALTER TABLE app_sessions ADD COLUMN test_submissions_json TEXT NOT NULL DEFAULT '[]'`
+        );
+      } catch {
+        /* duplicate column */
+      }
+      await db.execute(`CREATE INDEX IF NOT EXISTS idx_app_sessions_user_id ON app_sessions(user_id)`);
+    })().catch((err) => {
+      schemaReadyPromise = undefined;
+      throw err;
+    });
   }
   await schemaReadyPromise;
 }
