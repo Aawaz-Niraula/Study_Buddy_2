@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { FileText, Image as ImageIcon, FileImage, Sparkles, FolderOpen } from "lucide-react";
+import { FileText, Image as ImageIcon, FileImage, Sparkles, FolderOpen, Trash2, Loader2 } from "lucide-react";
 
 export interface SessionItem {
   id: string;
@@ -27,7 +27,10 @@ interface SessionHistoryListProps {
   activeGenerationId: string | null;
   onSelectSession: (id: string) => void;
   onSelectGeneration: (id: string) => void;
+  onDeleteSession?: (id: string) => void;
   loading?: boolean;
+  actionLoading?: boolean;
+  deletingSessionId?: string | null;
 }
 
 export function SessionHistoryList({
@@ -38,7 +41,10 @@ export function SessionHistoryList({
   activeGenerationId,
   onSelectSession,
   onSelectGeneration,
+  onDeleteSession,
   loading,
+  actionLoading = false,
+  deletingSessionId = null,
 }: SessionHistoryListProps) {
   if (loading) {
     return (
@@ -106,8 +112,10 @@ export function SessionHistoryList({
                 return (
                   <motion.button
                     key={gen.id}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => onSelectGeneration(gen.id)}
+                    type="button"
+                    disabled={actionLoading}
+                    whileTap={{ scale: actionLoading ? 1 : 0.98 }}
+                    onClick={() => !actionLoading && onSelectGeneration(gen.id)}
                     className={`w-full text-left p-3 rounded-lg transition-all ${
                       isActive
                         ? "bg-[#a78bfa]/20 border border-[#a78bfa]/50"
@@ -148,36 +156,62 @@ export function SessionHistoryList({
                 day: "numeric",
               });
 
+              const isBusy = actionLoading || deletingSessionId === session.id;
+
               return (
-                <motion.button
+                <div
                   key={session.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: idx * 0.03 }}
-                  whileTap={{ opacity: 0.6, scale: 0.98 }}
-                  onClick={() => onSelectSession(session.id)}
-                  className="w-full text-left p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/8 hover:border-white/20 transition-all"
+                  className="flex items-stretch gap-2"
                 >
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 rounded-lg bg-[#a78bfa]/10">
-                      <Icon className="w-4 h-4 text-[#a78bfa]" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-medium text-[#f2efff] truncate">
-                        {session.title || "Untitled"}
-                      </h3>
-                      <div className="flex items-center gap-2 text-xs text-[#857ca2]">
-                        <span>{date}</span>
-                        {session.questionCount !== undefined && (
-                          <>
-                            <span>•</span>
-                            <span>{session.questionCount} Q</span>
-                          </>
-                        )}
+                  <motion.button
+                    type="button"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.03 }}
+                    whileTap={{ opacity: isBusy ? 1 : 0.6, scale: isBusy ? 1 : 0.98 }}
+                    disabled={actionLoading}
+                    onClick={() => !actionLoading && onSelectSession(session.id)}
+                    className="flex-1 min-w-0 text-left p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/8 hover:border-white/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 rounded-lg bg-[#a78bfa]/10 shrink-0">
+                        <Icon className="w-4 h-4 text-[#a78bfa]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-medium text-[#f2efff] truncate">
+                          {session.title || "Untitled"}
+                        </h3>
+                        <div className="flex items-center gap-2 text-xs text-[#857ca2]">
+                          <span>{date}</span>
+                          {session.questionCount !== undefined && (
+                            <>
+                              <span>•</span>
+                              <span>{session.questionCount} Q</span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </motion.button>
+                  </motion.button>
+                  {onDeleteSession && (
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!isBusy) onDeleteSession(session.id);
+                      }}
+                      className="shrink-0 self-stretch px-3 rounded-xl border border-red-500/20 bg-red-500/5 text-red-400 hover:bg-red-500/15 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
+                      aria-label={`Delete session ${session.title || session.id}`}
+                    >
+                      {deletingSessionId === session.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>

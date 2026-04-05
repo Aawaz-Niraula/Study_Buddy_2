@@ -216,3 +216,58 @@ html {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(167, 139, 250, 0.5);
 }
+
+/* ─── Mobile Responsive ─────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Safe area support for notched devices */
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Ensure minimum touch targets */
+  button, a, [role="button"] {
+    min-height: 44px;
+  }
+
+  /* Better text sizing on mobile */
+  html {
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Prevent horizontal overflow */
+  main, .max-w-3xl, .max-w-2xl {
+    overflow-x: hidden;
+  }
+}
+
+/* Tablet breakpoint */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .max-w-3xl {
+    max-width: 90%;
+  }
+}
+
+/* Fix for iOS rubber-banding showing white */
+@supports (padding-top: env(safe-area-inset-top)) {
+  .fixed.top-0 {
+    padding-top: env(safe-area-inset-top);
+  }
+  .fixed.bottom-0 {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Tap highlight removal for mobile */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Better focus styles for accessibility */
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible {
+  outline: 2px solid rgba(167, 139, 250, 0.6);
+  outline-offset: 2px;
+}
+

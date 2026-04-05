@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Check, FileStack, History, Clock } from "lucide-react";
+import { Check, FileStack, History, Clock, Loader2 } from "lucide-react";
 
 interface TestOption {
   id: string;
@@ -13,6 +13,8 @@ interface TestOption {
 
 interface TestOptionsSheetProps {
   onSelect: (optionId: string, timerMinutes: number | null) => void;
+  /** True while the test is being generated on the server */
+  pending?: boolean;
 }
 
 const scopeOptions: TestOption[] = [
@@ -36,20 +38,17 @@ const timerOptions = [
   { id: "4-min", label: "4 Minutes", minutes: 4 },
 ];
 
-export function TestOptionsSheet({ onSelect }: TestOptionsSheetProps) {
+export function TestOptionsSheet({ onSelect, pending = false }: TestOptionsSheetProps) {
   const [selectedScopeId, setSelectedScopeId] = useState<string | null>(null);
   const [selectedTimerId, setSelectedTimerId] = useState<string>("no-timer");
 
   const handleSelect = () => {
-    if (!selectedScopeId) return;
-    
-    const timerOption = timerOptions.find(t => t.id === selectedTimerId);
+    if (!selectedScopeId || pending) return;
+
+    const timerOption = timerOptions.find((t) => t.id === selectedTimerId);
     const timerMinutes = timerOption?.minutes ?? null;
 
-    // Auto-dismiss after 300ms
-    setTimeout(() => {
-      onSelect(selectedScopeId, timerMinutes);
-    }, 300);
+    onSelect(selectedScopeId, timerMinutes);
   };
 
   return (
@@ -68,8 +67,10 @@ export function TestOptionsSheet({ onSelect }: TestOptionsSheetProps) {
           return (
             <motion.button
               key={option.id}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setSelectedScopeId(option.id)}
+              type="button"
+              whileTap={{ scale: pending ? 1 : 0.98 }}
+              onClick={() => !pending && setSelectedScopeId(option.id)}
+              disabled={pending}
               className={`w-full text-left p-5 rounded-2xl border transition-all duration-200 ${
                 isSelected
                   ? "bg-[#a78bfa]/10 border-[#a78bfa]/40"
@@ -116,8 +117,10 @@ export function TestOptionsSheet({ onSelect }: TestOptionsSheetProps) {
             return (
               <motion.button
                 key={option.id}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setSelectedTimerId(option.id)}
+                type="button"
+                whileTap={{ scale: pending ? 1 : 0.95 }}
+                onClick={() => !pending && setSelectedTimerId(option.id)}
+                disabled={pending}
                 className={`p-4 rounded-xl border transition-all duration-200 ${
                   isSelected
                     ? "bg-[#a78bfa]/20 border-[#a78bfa]/50"
@@ -138,16 +141,24 @@ export function TestOptionsSheet({ onSelect }: TestOptionsSheetProps) {
 
       {/* Start Test Button */}
       <motion.button
-        whileTap={{ opacity: 0.6 }}
+        type="button"
+        whileTap={{ scale: selectedScopeId && !pending ? 0.98 : 1 }}
         onClick={handleSelect}
-        disabled={!selectedScopeId}
-        className={`w-full min-h-[56px] px-6 py-4 rounded-2xl font-bold text-sm tracking-wide transition-all mt-6 ${
-          selectedScopeId
+        disabled={!selectedScopeId || pending}
+        className={`w-full min-h-[56px] px-6 py-4 rounded-2xl font-bold text-sm tracking-wide transition-all mt-6 flex items-center justify-center gap-2 active:opacity-90 ${
+          selectedScopeId && !pending
             ? "bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] text-white shadow-lg"
             : "bg-white/5 text-[#857ca2] opacity-50 cursor-not-allowed"
         }`}
       >
-        START TEST
+        {pending ? (
+          <>
+            <Loader2 className="w-5 h-5 animate-spin" />
+            STARTING...
+          </>
+        ) : (
+          "START TEST"
+        )}
       </motion.button>
     </div>
   );

@@ -48,7 +48,7 @@ export function Sidebar({ isOpen, onClose, side, children, title }: SidebarProps
               duration: 0.25,
               ease: [0.25, 0.1, 0.25, 1],
             }}
-            className={`fixed top-0 ${side === "left" ? "left-0" : "right-0"} bottom-0 w-[80vw] max-w-[320px] bg-[#0b0b12] z-50 flex flex-col`}
+            className={`fixed top-0 ${side === "left" ? "left-0" : "right-0"} bottom-0 w-[85vw] max-w-[360px] sm:w-[80vw] sm:max-w-[360px] bg-[#0b0b12] z-50 flex flex-col`}
             style={{
               boxShadow: side === "left" ? "4px 0 24px rgba(0,0,0,0.5)" : "-4px 0 24px rgba(0,0,0,0.5)",
               willChange: "transform",

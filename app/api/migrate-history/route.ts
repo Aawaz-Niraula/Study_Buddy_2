@@ -1,34 +1,15 @@
 import { createClient } from "@libsql/client";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { getAuthenticatedUserId } from "@/lib/supabase-api-auth";
 
 function getDbClient() {
   if (!process.env.TURSO_DATABASE_URL || !process.env.TURSO_AUTH_TOKEN) return null;
   return createClient({ url: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN });
 }
 
-async function getSupabaseUser() {
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll() {},
-      },
-    }
-  );
-  const { data: { user } } = await supabase.auth.getUser();
-  return user;
-}
-
 export async function POST(request: Request) {
   try {
-    const user = await getSupabaseUser();
-    if (!user) {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -63,7 +44,7 @@ export async function POST(request: Request) {
             sql: `INSERT INTO app_sessions (id, user_id, created_at, updated_at, title, source_kind, source_payload_json, generations_json, latest_mode, latest_difficulty, test_submissions_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             args: [
               session.id,
-              user.id,
+              userId,
               session.created_at || now,
               session.updated_at || now,
               session.title || "Migrated Session",
@@ -80,7 +61,7 @@ export async function POST(request: Request) {
           // Update existing session to claim ownership
           await db.execute({
             sql: `UPDATE app_sessions SET user_id = ? WHERE id = ? AND user_id IS NULL`,
-            args: [user.id, session.id],
+            args: [userId, session.id],
           });
         }
       } catch (err) {

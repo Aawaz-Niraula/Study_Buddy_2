@@ -13,9 +13,13 @@ import { TestScreen } from "@/components/TestScreen";
 import { ResultsScreen } from "@/components/ResultsScreen";
 import { TestReviewScreen } from "@/components/TestReviewScreen";
 import { GeneratedQuestionsView } from "@/components/GeneratedQuestionsView";
-import { Sparkles, CircleHelp, X, BookOpen, LayoutPanelLeft, Trophy } from "lucide-react";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { Sparkles, CircleHelp, X, BookOpen, LayoutPanelLeft, Trophy, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/lib/useAuth";
+import { compressImage, fileToCompressedDataUrl } from "@/lib/imageCompression";
+import { toast } from "sonner";
+import { upload } from "@vercel/blob/client";
 
 declare global {
   interface Window {
@@ -33,8 +37,9 @@ declare global {
   }
 }
 
-const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
-const MAX_PDF_SIZE_BYTES = 3 * 1024 * 1024;
+const MAX_IMAGE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB raw (will be compressed)
+const MAX_PDF_SIZE_BYTES = 15 * 1024 * 1024; // 15MB
+const MAX_IMAGES = 3;
 
 type SourceKind = "text" | "pdf" | "image" | null;
 type Attachment = {
@@ -85,69 +90,9 @@ type TestSubmission = {
   sessionTitle?: string;
 };
 
-let pdfJsLoader: Promise<void> | null = null;
-
-function loadScript(src: string) {
-  return new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector(`script[src="${src}"]`) as HTMLScriptElement | null;
-    if (existing)
-      return existing.dataset.loaded === "true"
-        ? resolve()
-        : existing.addEventListener("load", () => resolve(), { once: true });
-    const script = document.createElement("script");
-    script.src = src;
-    script.async = true;
-    script.crossOrigin = "anonymous";
-    script.onload = () => {
-      script.dataset.loaded = "true";
-      resolve();
-    };
-    script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
-    document.head.appendChild(script);
-  });
-}
-
-async function extractPdfText(file: File) {
-  if (!pdfJsLoader) {
-    pdfJsLoader = loadScript(
-      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"
-    ).then(() => {
-      if (!window.pdfjsLib) throw new Error("PDF reader failed to load.");
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-    });
-  }
-  await pdfJsLoader;
-  if (!window.pdfjsLib) throw new Error("PDF reader is unavailable.");
-  const pdf = await window.pdfjsLib.getDocument({
-    data: new Uint8Array(await file.arrayBuffer()),
-  }).promise;
-  const pages: string[] = [];
-  for (let n = 1; n <= pdf.numPages; n += 1) {
-    const content = await (await pdf.getPage(n)).getTextContent();
-    pages.push(
-      content.items
-        .map((item) => item.str?.trim() ?? "")
-        .filter(Boolean)
-        .join(" ")
-    );
-  }
-  return pages.join("\n");
-}
-
-async function fileToDataUrl(file: File) {
-  return await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () =>
-      typeof reader.result === "string"
-        ? resolve(reader.result)
-        : reject(new Error("Could not read image file."));
-    reader.onerror = () => reject(new Error("Could not read image file."));
-    reader.readAsDataURL(file);
-  });
-}
-
 export default function Home() {
+  const { user, loading: authLoading } = useAuth();
+
   // Session state
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionTitle, setSessionTitle] = useState("New session");
@@ -167,8 +112,8 @@ export default function Home() {
   const [testAnswers, setTestAnswers] = useState<TestAnswers>({});
   const [testSubmitted, setTestSubmitted] = useState(false);
   const [testScore, setTestScore] = useState<{ score: number; total: number } | null>(null);
-  const [testSubmissions, setTestSubmissions] = useState<TestSubmission[]>([]); // Current session tests
-  const [allTestSubmissions, setAllTestSubmissions] = useState<TestSubmission[]>([]); // All tests globally
+  const [testSubmissions, setTestSubmissions] = useState<TestSubmission[]>([]);
+  const [allTestSubmissions, setAllTestSubmissions] = useState<TestSubmission[]>([]);
   const [activeTestSubmissionId, setActiveTestSubmissionId] = useState<string | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [showResults, setShowResults] = useState(false);
@@ -187,7 +132,8 @@ export default function Home() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [reviewTestId, setReviewTestId] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
 
   // Computed values
   const hasResults = !!(
@@ -216,7 +162,6 @@ export default function Home() {
     [generations]
   );
 
-  // Combine all tests: current session tests + all historical tests (deduplicated)
   const testHistoryItems: TestSubmissionItem[] = useMemo(() => {
     const currentSessionIds = new Set(testSubmissions.map(t => t.id));
     const historicalTests = allTestSubmissions.filter(t => !currentSessionIds.has(t.id));
@@ -248,8 +193,7 @@ export default function Home() {
     setTestAnswers({});
     setTestSubmitted(false);
     setTestScore(null);
-    setTestSubmissions([]); // Clear current session tests only
-    // Don't clear allTestSubmissions - keep global test history
+    setTestSubmissions([]);
     setActiveTestSubmissionId(null);
     setCurrentQuestionIndex(0);
     setShowResults(false);
@@ -260,10 +204,23 @@ export default function Home() {
   };
 
   const loadHistory = async () => {
+    if (!user) {
+      setHistory([]);
+      setAllTestSubmissions([]);
+      return;
+    }
+
     setHistoryLoading(true);
     try {
       const res = await fetch("/api/generate");
       const data = await res.json().catch(() => ({}));
+
+      if (res.status === 401) {
+        setHistory([]);
+        setAllTestSubmissions([]);
+        return;
+      }
+
       const sessions = Array.isArray(data.sessions) ? data.sessions : [];
       setHistory(sessions);
       
@@ -292,18 +249,58 @@ export default function Home() {
     }
   };
 
-  // Load history on mount
+  // Load history when user changes
   useEffect(() => {
-    loadHistory();
+    if (!authLoading) {
+      loadHistory();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authLoading, user?.id]);
 
+  // ─── PDF: direct client upload to Vercel Blob (avoids ~4.5MB serverless body limit) ──
+  const uploadPdfViaBlob = async (file: File): Promise<string> => {
+    setUploadStatus("Uploading PDF...");
+    const blob = await upload(file.name, file, {
+      access: "public",
+      handleUploadUrl: "/api/blob/upload",
+      multipart: file.size > 5 * 1024 * 1024,
+      onUploadProgress: (ev) => {
+        setUploadStatus(`Uploading PDF... ${Math.round(ev.percentage)}%`);
+      },
+    });
+
+    setUploadStatus("Extracting text from PDF...");
+    const res = await fetch("/api/upload-pdf/process", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: blob.url }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(
+        typeof data.error === "string" ? data.error : "Failed to process PDF. Try again."
+      );
+    }
+
+    setUploadStatus(`Extracted text from ${data.pages ?? "?"} pages.`);
+    return data.text || "";
+  };
+
+  // ─── File Handler ────────────────────────────────────────────
   const handleFilesAdded = async (
     event: React.ChangeEvent<HTMLInputElement>,
     origin: "upload" | "camera"
   ) => {
     const files = Array.from(event.target.files ?? []);
     if (!files.length) return;
+
+    if (!user) {
+      setError("Please sign in to upload files.");
+      toast.error("Please sign in to upload files.");
+      event.target.value = "";
+      return;
+    }
 
     if (sourceKind === "text" || text.trim()) {
       setError("This session already uses pasted notes. Click New Session to switch source type.");
@@ -326,6 +323,14 @@ export default function Home() {
       if (incomingKind === "pdf" && (files.length > 1 || attachments.length > 0))
         throw new Error("Only one PDF can be used in a session.");
 
+      // Image count limit
+      if (incomingKind === "image") {
+        const totalImages = attachments.length + files.length;
+        if (totalImages > MAX_IMAGES) {
+          throw new Error(`Maximum ${MAX_IMAGES} images allowed per session. You have ${attachments.length} already.`);
+        }
+      }
+
       const parsed: Attachment[] = [];
       for (const file of files) {
         const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
@@ -334,27 +339,51 @@ export default function Home() {
         if (incomingKind === "pdf" && !isPdf) throw new Error("PDF sessions can only contain a PDF.");
         if (incomingKind === "image" && !isImage)
           throw new Error("Photo sessions can only contain images.");
-        if (isPdf && file.size > MAX_PDF_SIZE_BYTES) throw new Error(`${file.name}: PDF is too large.`);
+        if (isPdf && file.size > MAX_PDF_SIZE_BYTES) throw new Error(`${file.name}: PDF too large (max 15MB).`);
         if (isImage && file.size > MAX_IMAGE_SIZE_BYTES)
-          throw new Error(`${file.name}: image is too large.`);
+          throw new Error(`${file.name}: image too large (max 20MB before compression).`);
 
-        parsed.push({
-          id: `${file.name}-${file.size}-${file.lastModified}`,
-          name: file.name,
-          type: isPdf ? "pdf" : "image",
-          extractedText: isPdf ? (await extractPdfText(file)).trim() : undefined,
-          mimeType: file.type || (isPdf ? "application/pdf" : "image/jpeg"),
-          dataUrl: isImage ? await fileToDataUrl(file) : undefined,
-          origin,
-        });
+        if (isPdf) {
+          // Use Vercel Blob upload for PDFs
+          const extractedText = await uploadPdfViaBlob(file);
+          parsed.push({
+            id: `${file.name}-${file.size}-${file.lastModified}`,
+            name: file.name,
+            type: "pdf",
+            extractedText: extractedText.trim(),
+            mimeType: "application/pdf",
+            origin,
+          });
+        } else {
+          // Compress image before creating data URL
+          setUploadStatus(`Compressing ${file.name}...`);
+          const compressed = await compressImage(file, (p) => {
+            setUploadStatus(`Compressing ${p.fileName}... ${p.progress}%`);
+          });
+          
+          setUploadStatus(`Processing ${file.name}...`);
+          const dataUrl = await fileToCompressedDataUrl(compressed);
+
+          parsed.push({
+            id: `${file.name}-${file.size}-${file.lastModified}`,
+            name: file.name,
+            type: "image",
+            mimeType: compressed.type || "image/jpeg",
+            dataUrl,
+            origin,
+          });
+        }
       }
 
       setAttachments((current) => [...current, ...parsed]);
       setSourceKind(incomingKind);
       setSessionTitle(parsed[0]?.name || "File session");
       setUploadStatus(`Added ${parsed.length} file${parsed.length === 1 ? "" : "s"}.`);
+      toast.success(`${parsed.length} file${parsed.length === 1 ? "" : "s"} added successfully.`);
     } catch (err: any) {
-      setError(err.message || "Could not read the selected file.");
+      const msg = err.message || "Could not read the selected file.";
+      setError(msg);
+      toast.error(msg);
     } finally {
       event.target.value = "";
       setUploading(false);
@@ -375,6 +404,12 @@ export default function Home() {
   const generate = async () => {
     if (!sourceKind) {
       setError("Add notes, one PDF, or one or more photos first.");
+      return;
+    }
+
+    if (!user) {
+      setError("Please sign in to generate questions.");
+      toast.error("Please sign in to generate questions.");
       return;
     }
 
@@ -413,9 +448,12 @@ export default function Home() {
       ]);
       setActiveGenerationId(generationId);
 
+      toast.success("Questions generated successfully!");
       if (sessionHistoryOpen) await loadHistory();
     } catch (err: any) {
-      setError(err.message || "Could not generate questions.");
+      const msg = err.message || "Could not generate questions.";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -423,61 +461,78 @@ export default function Home() {
 
   const openSession = async (id: string) => {
     setError("");
-    const res = await fetch(`/api/generate?sessionId=${encodeURIComponent(id)}`);
-    const data = await res.json().catch(() => ({}));
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/generate?sessionId=${encodeURIComponent(id)}`);
+      const data = await res.json().catch(() => ({}));
 
-    if (!res.ok) {
-      setError(data.detail || "Could not open session.");
-      return;
-    }
+      if (!res.ok) {
+        setError(data.detail || "Could not open session.");
+        toast.error(data.detail || "Could not open session.");
+        return;
+      }
 
-    const session = data.session;
-    setSessionId(session.id);
-    setSessionTitle(session.title);
-    setSourceKind(session.source_kind);
-    setMode(session.latest_mode ?? "mix");
-    setDifficulty(session.latest_difficulty ?? "medium");
-    
-    // Only set text if source_kind is "text", otherwise clear it
-    // This prevents showing text in the textarea when the source was a file/image
-    if (session.source_kind === "text") {
-      setText(session.source_payload?.text ?? "");
-    } else {
-      setText("");
+      const session = data.session;
+      setSessionId(session.id);
+      setSessionTitle(session.title);
+      setSourceKind(session.source_kind);
+      setMode(session.latest_mode ?? "mix");
+      setDifficulty(session.latest_difficulty ?? "medium");
+      
+      if (session.source_kind === "text") {
+        setText(session.source_payload?.text ?? "");
+      } else {
+        setText("");
+      }
+      
+      setAttachments(session.source_payload?.attachments ?? []);
+      setGenerations(Array.isArray(session.generations) ? session.generations : []);
+      setQuestions(session.latest_generation?.questions ?? null);
+      setActiveGenerationId(session.latest_generation?.id ?? null);
+      
+      const sessionTests = Array.isArray(session.test_submissions) ? session.test_submissions : [];
+      setTestSubmissions(sessionTests.map((t: any) => ({
+        ...t,
+        sessionId: session.id,
+        sessionTitle: session.title,
+      })));
+      
+      setUploadStatus("");
+      setSessionHistoryOpen(false);
+      setTestHistoryOpen(false);
+      setTestMode(false);
+      setTestQuestions(null);
+      setTestAnswers({});
+      setTestSubmitted(false);
+      setTestScore(null);
+      setShowResults(false);
+      toast.success("Session loaded.");
+    } catch (err: any) {
+      const msg = err.message || "Could not open session.";
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setActionLoading(false);
     }
-    
-    setAttachments(session.source_payload?.attachments ?? []);
-    setGenerations(Array.isArray(session.generations) ? session.generations : []);
-    setQuestions(session.latest_generation?.questions ?? null);
-    setActiveGenerationId(session.latest_generation?.id ?? null);
-    
-    // Set current session tests but DON'T override global allTestSubmissions
-    const sessionTests = Array.isArray(session.test_submissions) ? session.test_submissions : [];
-    setTestSubmissions(sessionTests.map((t: any) => ({
-      ...t,
-      sessionId: session.id,
-      sessionTitle: session.title,
-    })));
-    
-    setUploadStatus("");
-    // Close both sidebars when opening a session
-    setSessionHistoryOpen(false);
-    setTestHistoryOpen(false);
-    setTestMode(false);
-    setTestQuestions(null);
-    setTestAnswers({});
-    setTestSubmitted(false);
-    setTestScore(null);
-    setShowResults(false);
   };
 
   const deleteSession = async (id: string) => {
-    const res = await fetch(`/api/generate?sessionId=${encodeURIComponent(id)}`, {
-      method: "DELETE",
-    });
-    if (res.ok) {
-      if (sessionId === id) resetSession();
-      await loadHistory();
+    setDeletingSessionId(id);
+    try {
+      const res = await fetch(`/api/generate?sessionId=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        if (sessionId === id) resetSession();
+        await loadHistory();
+        toast.success("Session deleted.");
+      } else {
+        toast.error("Could not delete session.");
+      }
+    } catch {
+      toast.error("Could not delete session.");
+    } finally {
+      setDeletingSessionId(null);
     }
   };
 
@@ -515,8 +570,11 @@ export default function Home() {
       setCurrentQuestionIndex(0);
       setTimerMinutes(timer);
       setTestMode(true);
+      toast.success("Test generated! Good luck!");
     } catch (err: any) {
-      setError(err.message || "Could not generate test.");
+      const msg = err.message || "Could not generate test.";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -566,6 +624,7 @@ export default function Home() {
       const gradeData = await gradeRes.json().catch(() => ({}));
       if (!gradeRes.ok) {
         setError(gradeData.detail || "Could not grade short answers.");
+        toast.error("Could not grade short answers.");
         return;
       }
 
@@ -593,22 +652,31 @@ export default function Home() {
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setError(data.detail || "Could not save test submission.");
+      const msg = data.detail || "Could not save test submission.";
+      setError(msg);
+      toast.error(msg);
       return;
     }
 
     setTestSubmissions((current) => [...current, payload]);
-    // Also add to global test history
     setAllTestSubmissions((current) => [...current, payload]);
     setTestSubmitted(true);
     setTestScore({ score, total });
     setActiveTestSubmissionId(payload.id);
     setTestMode(false);
     setShowResults(true);
+
+    const percentage = Math.round((score / total) * 100);
+    if (percentage >= 70) {
+      toast.success(`Great job! You scored ${percentage}%!`);
+    } else if (percentage >= 50) {
+      toast(`You scored ${percentage}%. Keep practicing!`, { icon: "📚" });
+    } else {
+      toast(`You scored ${percentage}%. Don't give up!`, { icon: "💪" });
+    }
   };
 
   const openTestSubmission = (testId: string) => {
-    // Look in current session tests first, then in all historical tests
     let submission = testSubmissions.find((t) => t.id === testId);
     if (!submission) {
       submission = allTestSubmissions.find((t) => t.id === testId);
@@ -719,9 +787,13 @@ export default function Home() {
     setMenuOpen(!menuOpen);
   };
 
+  // ─── Loading state while auth initializes ────────────────────
+  if (authLoading) {
+    return <LoadingSkeleton />;
+  }
+
   // Render different screens
   if (reviewTestId) {
-    // Look in current session tests first, then in all historical tests
     let submission = testSubmissions.find((t) => t.id === reviewTestId);
     if (!submission) {
       submission = allTestSubmissions.find((t) => t.id === reviewTestId);
@@ -797,26 +869,6 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#06060b] via-[#0b0b12] to-[#11111a] text-[#f2efff] relative">
-      {/* Toast Notification */}
-      <AnimatePresence>
-        {toast && (
-          <motion.div
-            initial={{ opacity: 0, y: -50 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -50 }}
-            className="fixed top-16 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 bg-red-500/90 backdrop-blur-sm border border-red-400/50 rounded-xl shadow-lg shadow-red-500/20"
-          >
-            <span className="text-sm font-medium text-white">{toast}</span>
-            <button
-              onClick={() => setToast(null)}
-              className="p-1 rounded-full hover:bg-white/20 transition-colors"
-            >
-              <X className="w-4 h-4 text-white" />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Top Bar */}
       <TopBar 
         onTestHistoryClick={handleTestHistoryClick} 
@@ -828,7 +880,7 @@ export default function Home() {
       <GreetingBanner />
 
       {/* Main Content */}
-      <div className="pt-20 px-4 pb-24 max-w-3xl mx-auto">
+      <div className="pt-16 sm:pt-20 px-3 sm:px-4 pb-20 sm:pb-24 max-w-3xl mx-auto">
         {!testMode && !showResults && (
           <>
             {/* Hero Section */}
@@ -844,18 +896,18 @@ export default function Home() {
 
                 {/* NEW SESSION Button - Top Right */}
                 <motion.button
-                  whileTap={{ opacity: 0.6 }}
+                  whileTap={{ scale: 0.95, opacity: 0.6 }}
                   onClick={() => {
-                    // Check if current session is empty
                     const hasContent = text.trim() || attachments.length > 0 || generations.length > 0;
                     if (!hasContent && !sessionId) {
-                      setToast("Please use your current session first");
-                      setTimeout(() => setToast(null), 4000); // Auto-dismiss after 4s
+                      toast("Please use your current session first", { icon: "📝" });
                       return;
                     }
                     resetSession();
+                    toast.success("New session started.");
                   }}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-xs tracking-wide bg-white/5 border border-white/10 text-[#ddd6fe] hover:bg-white/8 transition-all"
+                  disabled={loading || uploading}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-xs tracking-wide bg-white/5 border border-white/10 text-[#ddd6fe] hover:bg-white/8 active:bg-white/12 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <X className="w-3.5 h-3.5" />
                   NEW SESSION
@@ -866,7 +918,7 @@ export default function Home() {
               <div className="text-center">
                 <div className="flex items-center justify-center gap-3 mb-3">
                   <Sparkles className="w-6 h-6 text-[#a78bfa]" />
-                  <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] bg-clip-text text-transparent">
+                  <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] bg-clip-text text-transparent">
                     Study Buddy
                   </h1>
                   <motion.button
@@ -882,15 +934,21 @@ export default function Home() {
                 <p className="text-[#857ca2] text-sm">
                   Turn notes into smart questions with AI
                 </p>
+                {!user && (
+                  <p className="text-[#a78bfa]/70 text-xs mt-2">
+                    Sign in to save your progress and history
+                  </p>
+                )}
               </div>
 
               {/* TAKE TEST Button - Centered, only show if has questions */}
               {hasResults && (
                 <div className="mt-6 flex justify-center">
                   <motion.button
-                    whileTap={{ opacity: 0.6 }}
+                    whileTap={{ scale: 0.95, opacity: 0.6 }}
                     onClick={() => setTestOptionsOpen(true)}
-                    className="inline-flex items-center gap-2 min-h-[48px] px-6 py-3 rounded-2xl font-medium text-sm tracking-wide bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] text-white shadow-lg transition-all"
+                    disabled={loading || uploading}
+                    className="inline-flex items-center gap-2 min-h-[48px] px-6 py-3 rounded-2xl font-medium text-sm tracking-wide bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] text-white shadow-lg active:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <BookOpen className="w-4 h-4" />
                     TAKE TEST
@@ -899,7 +957,7 @@ export default function Home() {
               )}
             </div>
 
-            {/* Help Modal - Dynamic with Animation */}
+            {/* Help Modal */}
             <AnimatePresence>
               {helpOpen && (
                 <motion.div
@@ -931,7 +989,7 @@ export default function Home() {
                   <div className="space-y-3 text-sm text-[#ddd6fe] leading-relaxed pr-8">
                     <div className="flex gap-3">
                       <span className="text-[#a78bfa] font-bold">1.</span>
-                      <p>Start a session with <strong className="text-[#f9a8d4]">one source type</strong>: pasted notes, a PDF, or photos.</p>
+                      <p>Start a session with <strong className="text-[#f9a8d4]">one source type</strong>: pasted notes, a PDF, or photos (max 3).</p>
                     </div>
                     <div className="flex gap-3">
                       <span className="text-[#a78bfa] font-bold">2.</span>
@@ -967,11 +1025,13 @@ export default function Home() {
               onQuestionCountChange={setQuestionCount}
               onGenerate={generate}
               loading={loading}
+              uploading={uploading}
+              actionLoading={actionLoading}
               error={error}
               uploadStatus={uploadStatus}
             />
 
-            {/* Generated Questions - Interactive Q&A with Reveal Answers */}
+            {/* Generated Questions */}
             {hasResults && questions && (
               <GeneratedQuestionsView
                 questions={questions}
@@ -983,7 +1043,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* Session History Sidebar (LEFT) - Shows current session + previous sessions */}
+      {/* Session History Sidebar (LEFT) */}
       <Sidebar
         isOpen={sessionHistoryOpen}
         onClose={() => setSessionHistoryOpen(false)}
@@ -999,6 +1059,9 @@ export default function Home() {
           onSelectSession={(id) => {
             openSession(id);
           }}
+          onDeleteSession={(id) => {
+            deleteSession(id);
+          }}
           onSelectGeneration={(id) => {
             const gen = generations.find((g) => g.id === id);
             if (gen) {
@@ -1010,10 +1073,12 @@ export default function Home() {
             }
           }}
           loading={historyLoading}
+          actionLoading={actionLoading}
+          deletingSessionId={deletingSessionId}
         />
       </Sidebar>
 
-      {/* Test History Sidebar (RIGHT) - Shows all test submissions */}
+      {/* Test History Sidebar (RIGHT) */}
       <Sidebar
         isOpen={testHistoryOpen}
         onClose={() => setTestHistoryOpen(false)}
@@ -1030,8 +1095,8 @@ export default function Home() {
       {/* Test Options Bottom Sheet */}
       <BottomSheet isOpen={testOptionsOpen} onClose={() => setTestOptionsOpen(false)}>
         <TestOptionsSheet
+          pending={loading}
           onSelect={(optionId, timerMins) => {
-            setTestOptionsOpen(false);
             startTest(optionId, timerMins);
           }}
         />
@@ -1042,15 +1107,16 @@ export default function Home() {
         <div className="py-4">
           <h3 className="text-xl font-bold text-[#f2efff] mb-4">Menu</h3>
           <div className="space-y-2">
-            {/* Take Test Option - in menu for quick access */}
+            {/* Take Test Option */}
             {hasResults && (
               <motion.button
-                whileTap={{ opacity: 0.6 }}
+                whileTap={{ scale: 0.98, opacity: 0.6 }}
                 onClick={() => {
                   setMenuOpen(false);
                   setTestOptionsOpen(true);
                 }}
-                className="w-full text-left p-4 rounded-xl bg-gradient-to-r from-[#a78bfa]/20 to-[#f9a8d4]/20 border border-[#a78bfa]/30 hover:bg-[#a78bfa]/30 transition-colors text-[#f2efff] flex items-center gap-3"
+                disabled={loading || uploading}
+                className="w-full text-left p-4 rounded-xl bg-gradient-to-r from-[#a78bfa]/20 to-[#f9a8d4]/20 border border-[#a78bfa]/30 hover:bg-[#a78bfa]/30 active:bg-[#a78bfa]/40 transition-colors text-[#f2efff] flex items-center gap-3 disabled:opacity-40"
               >
                 <BookOpen className="w-5 h-5 text-[#a78bfa]" />
                 <div>
@@ -1062,12 +1128,12 @@ export default function Home() {
 
             {/* View Sessions */}
             <motion.button
-              whileTap={{ opacity: 0.6 }}
+              whileTap={{ scale: 0.98, opacity: 0.6 }}
               onClick={() => {
                 setMenuOpen(false);
                 handleSessionHistoryClick();
               }}
-              className="w-full text-left p-4 rounded-xl bg-white/5 hover:bg-white/8 transition-colors text-[#ddd6fe] flex items-center gap-3"
+              className="w-full text-left p-4 rounded-xl bg-white/5 hover:bg-white/8 active:bg-white/12 transition-colors text-[#ddd6fe] flex items-center gap-3"
             >
               <LayoutPanelLeft className="w-5 h-5 text-[#857ca2]" />
               <div>
@@ -1078,12 +1144,12 @@ export default function Home() {
 
             {/* View Test History */}
             <motion.button
-              whileTap={{ opacity: 0.6 }}
+              whileTap={{ scale: 0.98, opacity: 0.6 }}
               onClick={() => {
                 setMenuOpen(false);
                 handleTestHistoryClick();
               }}
-              className="w-full text-left p-4 rounded-xl bg-white/5 hover:bg-white/8 transition-colors text-[#ddd6fe] flex items-center gap-3"
+              className="w-full text-left p-4 rounded-xl bg-white/5 hover:bg-white/8 active:bg-white/12 transition-colors text-[#ddd6fe] flex items-center gap-3"
             >
               <Trophy className="w-5 h-5 text-[#857ca2]" />
               <div>
@@ -1094,12 +1160,12 @@ export default function Home() {
 
             {/* New Session */}
             <motion.button
-              whileTap={{ opacity: 0.6 }}
+              whileTap={{ scale: 0.98, opacity: 0.6 }}
               onClick={() => {
                 setMenuOpen(false);
                 resetSession();
               }}
-              className="w-full text-left p-4 rounded-xl bg-white/5 hover:bg-white/8 transition-colors text-[#ddd6fe] flex items-center gap-3"
+              className="w-full text-left p-4 rounded-xl bg-white/5 hover:bg-white/8 active:bg-white/12 transition-colors text-[#ddd6fe] flex items-center gap-3"
             >
               <X className="w-5 h-5 text-[#857ca2]" />
               <div>
@@ -1110,6 +1176,29 @@ export default function Home() {
           </div>
         </div>
       </BottomSheet>
+
+      {/* Full-screen loading overlay for generation */}
+      <AnimatePresence>
+        {loading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-[#0b0b12] border border-white/10 rounded-2xl p-8 flex flex-col items-center gap-4 shadow-2xl"
+            >
+              <Loader2 className="w-10 h-10 text-[#a78bfa] animate-spin" />
+              <p className="text-sm text-[#ddd6fe] font-medium">Generating with AI...</p>
+              <p className="text-xs text-[#857ca2]">This may take a few seconds</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </main>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, Upload, Camera, X, FileText, Image as ImageIcon, Minus, Plus } from "lucide-react";
+import { ChevronDown, Upload, Camera, X, FileText, Image as ImageIcon, Minus, Plus, Loader2 } from "lucide-react";
 
 interface Attachment {
   id: string;
@@ -24,6 +24,8 @@ interface SessionFormProps {
   onQuestionCountChange: (value: number) => void;
   onGenerate: () => void;
   loading: boolean;
+  uploading?: boolean;
+  actionLoading?: boolean;
   error: string;
   uploadStatus: string;
 }
@@ -51,6 +53,8 @@ export function SessionForm({
   onQuestionCountChange,
   onGenerate,
   loading,
+  uploading,
+  actionLoading = false,
   error,
   uploadStatus,
 }: SessionFormProps) {
@@ -59,8 +63,9 @@ export function SessionForm({
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const hasInput = text.trim() || attachments.length > 0;
+  const isDisabled = loading || uploading || actionLoading;
 
-  // Auto-expand step 2 when input exists - using useEffect to avoid render-time side effects
+  // Auto-expand step 2 when input exists
   useEffect(() => {
     if (hasInput && !step2Expanded) {
       const timer = setTimeout(() => setStep2Expanded(true), 100);
@@ -87,24 +92,31 @@ export function SessionForm({
             value={text}
             onChange={(e) => onTextChange(e.target.value)}
             placeholder="Paste your notes here..."
-            className="w-full min-h-[120px] bg-[#11111a] border-none rounded-xl px-4 py-3 text-[#f2efff] text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#a78bfa]/40 placeholder-[#857ca2]"
+            disabled={isDisabled}
+            className="w-full min-h-[120px] bg-[#11111a] border-none rounded-xl px-4 py-3 text-[#f2efff] text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#a78bfa]/40 placeholder-[#857ca2] disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
             style={{ fontFamily: "inherit" }}
           />
 
           {/* File Upload Buttons */}
-          <div className="flex items-center gap-3 mt-4">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 mt-4">
             <motion.button
-              whileTap={{ opacity: 0.6 }}
-              onClick={() => fileInputRef.current?.click()}
-              className="flex-1 min-h-[48px] px-4 py-2 bg-white/5 border border-white/10 rounded-full text-sm font-medium text-[#ddd6fe] hover:bg-white/8 transition-colors flex items-center justify-center gap-2"
+              whileTap={{ scale: isDisabled ? 1 : 0.95, opacity: isDisabled ? 1 : 0.6 }}
+              onClick={() => !isDisabled && fileInputRef.current?.click()}
+              disabled={isDisabled}
+              className="flex-1 min-h-[48px] px-4 py-2 bg-white/5 border border-white/10 rounded-full text-sm font-medium text-[#ddd6fe] hover:bg-white/8 active:scale-[0.98] active:opacity-80 transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
             >
-              <Upload className="w-4 h-4" />
-              ADD FILES
+              {uploading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Upload className="w-4 h-4" />
+              )}
+              {uploading ? "UPLOADING..." : "ADD FILES"}
             </motion.button>
             <motion.button
-              whileTap={{ opacity: 0.6 }}
-              onClick={() => cameraInputRef.current?.click()}
-              className="flex-1 min-h-[48px] px-4 py-2 bg-white/5 border border-white/10 rounded-full text-sm font-medium text-[#ddd6fe] hover:bg-white/8 transition-colors flex items-center justify-center gap-2"
+              whileTap={{ scale: isDisabled ? 1 : 0.95, opacity: isDisabled ? 1 : 0.6 }}
+              onClick={() => !isDisabled && cameraInputRef.current?.click()}
+              disabled={isDisabled}
+              className="flex-1 min-h-[48px] px-4 py-2 bg-white/5 border border-white/10 rounded-full text-sm font-medium text-[#ddd6fe] hover:bg-white/8 active:scale-[0.98] active:opacity-80 transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
             >
               <Camera className="w-4 h-4" />
               TAKE PHOTO
@@ -149,8 +161,9 @@ export function SessionForm({
                     {attachment.name}
                   </span>
                   <button
-                    onClick={() => onRemoveAttachment(attachment.id)}
-                    className="p-0.5 hover:bg-white/10 rounded-full transition-colors"
+                    onClick={() => !isDisabled && onRemoveAttachment(attachment.id)}
+                    disabled={isDisabled}
+                    className="p-0.5 hover:bg-white/10 active:bg-white/20 rounded-full transition-colors disabled:opacity-40"
                   >
                     <X className="w-3.5 h-3.5 text-[#f87171]" />
                   </button>
@@ -161,7 +174,10 @@ export function SessionForm({
 
           {/* Upload Status */}
           {uploadStatus && (
-            <p className="mt-3 text-xs text-[#a78bfa]">{uploadStatus}</p>
+            <div className="mt-3 flex items-center gap-2">
+              {uploading && <Loader2 className="w-3 h-3 text-[#a78bfa] animate-spin" />}
+              <p className="text-xs text-[#a78bfa]">{uploadStatus}</p>
+            </div>
           )}
         </div>
       </div>
@@ -169,8 +185,10 @@ export function SessionForm({
       {/* Step 2: Options Section */}
       <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
         <button
+          type="button"
           onClick={() => setStep2Expanded(!step2Expanded)}
-          className="w-full p-6 flex items-center justify-between hover:bg-white/5 transition-colors"
+          disabled={isDisabled}
+          className="w-full p-6 flex items-center justify-between hover:bg-white/5 active:bg-white/8 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <div className="flex items-center gap-3">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm ${hasInput ? "bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4]" : "bg-white/10"}`}>
@@ -206,9 +224,10 @@ export function SessionForm({
                     {difficultyOptions.map((diff) => (
                       <motion.button
                         key={diff}
-                        whileTap={{ opacity: 0.6 }}
-                        onClick={() => onDifficultyChange(diff)}
-                        className={`flex-1 min-h-[48px] px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                        whileTap={{ scale: 0.95, opacity: 0.6 }}
+                        onClick={() => !isDisabled && onDifficultyChange(diff)}
+                        disabled={isDisabled}
+                        className={`flex-1 min-h-[48px] px-4 py-2 rounded-full text-sm font-medium transition-all disabled:cursor-not-allowed ${
                           difficulty === diff
                             ? "bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] text-white"
                             : "bg-white/5 border border-white/10 text-[#ddd6fe] opacity-60 hover:opacity-100"
@@ -229,9 +248,10 @@ export function SessionForm({
                     {formatOptions.map((fmt) => (
                       <motion.button
                         key={fmt.value}
-                        whileTap={{ opacity: 0.6 }}
-                        onClick={() => onModeChange(fmt.value)}
-                        className={`px-4 py-2 min-h-[44px] rounded-full text-sm font-medium transition-all ${
+                        whileTap={{ scale: 0.95, opacity: 0.6 }}
+                        onClick={() => !isDisabled && onModeChange(fmt.value)}
+                        disabled={isDisabled}
+                        className={`px-4 py-2 min-h-[44px] rounded-full text-sm font-medium transition-all disabled:cursor-not-allowed ${
                           mode === fmt.value
                             ? "bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] text-white"
                             : "bg-white/5 border border-white/10 text-[#ddd6fe] opacity-60 hover:opacity-100"
@@ -250,9 +270,10 @@ export function SessionForm({
                   </label>
                   <div className="flex items-center gap-4">
                     <motion.button
-                      whileTap={{ opacity: 0.6 }}
-                      onClick={() => onQuestionCountChange(Math.max(1, questionCount - 1))}
-                      className="w-12 h-12 rounded-full bg-white/5 border border-white/10 hover:bg-white/8 transition-colors flex items-center justify-center"
+                      whileTap={{ scale: 0.9, opacity: 0.6 }}
+                      onClick={() => !isDisabled && onQuestionCountChange(Math.max(1, questionCount - 1))}
+                      disabled={isDisabled}
+                      className="w-12 h-12 rounded-full bg-white/5 border border-white/10 hover:bg-white/8 active:bg-white/12 transition-colors flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <Minus className="w-5 h-5 text-[#ddd6fe]" />
                     </motion.button>
@@ -260,9 +281,10 @@ export function SessionForm({
                       <span className="text-2xl font-bold text-[#f2efff]">{questionCount}</span>
                     </div>
                     <motion.button
-                      whileTap={{ opacity: 0.6 }}
-                      onClick={() => onQuestionCountChange(Math.min(20, questionCount + 1))}
-                      className="w-12 h-12 rounded-full bg-white/5 border border-white/10 hover:bg-white/8 transition-colors flex items-center justify-center"
+                      whileTap={{ scale: 0.9, opacity: 0.6 }}
+                      onClick={() => !isDisabled && onQuestionCountChange(Math.min(20, questionCount + 1))}
+                      disabled={isDisabled}
+                      className="w-12 h-12 rounded-full bg-white/5 border border-white/10 hover:bg-white/8 active:bg-white/12 transition-colors flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <Plus className="w-5 h-5 text-[#ddd6fe]" />
                     </motion.button>
@@ -277,16 +299,23 @@ export function SessionForm({
       {/* Step 3: Generate Button */}
       <div className="pt-2">
         <motion.button
-          whileTap={{ opacity: hasInput ? 0.6 : 1 }}
+          whileTap={{ scale: hasInput && !isDisabled ? 0.98 : 1, opacity: hasInput && !isDisabled ? 0.8 : 1 }}
           onClick={onGenerate}
-          disabled={!hasInput || loading}
-          className={`w-full min-h-[56px] px-6 py-4 rounded-2xl font-bold text-sm tracking-wide transition-all ${
-            hasInput && !loading
-              ? "bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] text-white shadow-lg"
+          disabled={!hasInput || isDisabled}
+          className={`w-full min-h-[56px] px-6 py-4 rounded-2xl font-bold text-sm tracking-wide transition-all flex items-center justify-center gap-2 ${
+            hasInput && !isDisabled
+              ? "bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] text-white shadow-lg active:scale-[0.98] active:opacity-90"
               : "bg-white/5 text-[#857ca2] opacity-50 cursor-not-allowed"
           }`}
         >
-          {loading ? "GENERATING..." : "GENERATE QUESTIONS"}
+          {loading ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              GENERATING...
+            </>
+          ) : (
+            "GENERATE QUESTIONS"
+          )}
         </motion.button>
       </div>
 

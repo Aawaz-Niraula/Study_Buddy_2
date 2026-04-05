@@ -51,14 +51,14 @@ export function ResultsScreen({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#06060b] via-[#0b0b12] to-[#11111a] text-[#f2efff] py-8 px-4">
+    <div className="min-h-screen bg-gradient-to-b from-[#06060b] via-[#0b0b12] to-[#11111a] text-[#f2efff] py-6 sm:py-8 px-3 sm:px-4">
       <div className="max-w-3xl mx-auto">
         {/* Score Circle */}
         <motion.div
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: "spring", duration: 0.8 }}
-          className="w-48 h-48 mx-auto mb-8"
+          className="w-36 h-36 sm:w-48 sm:h-48 mx-auto mb-6 sm:mb-8"
         >
           <CircularProgressbar
             value={percentage}
@@ -146,7 +146,7 @@ export function ResultsScreen({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6 }}
-          className="flex gap-4 sticky bottom-4"
+          className="flex gap-3 sm:gap-4 sticky bottom-4"
         >
           <motion.button
             whileTap={{ opacity: 0.6 }}

@@ -1,13 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase-client";
 import { motion } from "framer-motion";
 import { Mail, Lock, Eye, EyeOff, ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/useAuth";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 
 export default function RegisterPage() {
+  const { user, loading: authLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -16,6 +19,12 @@ export default function RegisterPage() {
   const [error, setError] = useState("");
   const router = useRouter();
   const supabase = createClient();
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      router.replace("/");
+    }
+  }, [authLoading, user, router]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,15 +42,34 @@ export default function RegisterPage() {
     setLoading(true);
     setError("");
 
-    const { error } = await supabase.auth.signUp({
+    // Sign up without email verification
+    // Note: In Supabase Dashboard > Auth > Settings, disable "Confirm email" for this to work
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
     });
 
     if (error) {
       setError(error.message);
       setLoading(false);
       return;
+    }
+
+    // If user was created but needs confirmation, try auto sign-in
+    if (data.user && !data.session) {
+      // Attempt immediate sign-in (works when email confirmation is disabled)
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (signInError) {
+        setError("Account created! Please check your email to verify, then sign in.");
+        setLoading(false);
+        return;
+      }
     }
 
     await migrateLocalHistory();
@@ -87,6 +115,14 @@ export default function RegisterPage() {
       console.error("Failed to migrate history:", err);
     }
   };
+
+  if (authLoading) {
+    return <LoadingSkeleton />;
+  }
+
+  if (user) {
+    return null;
+  }
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#06060b] via-[#0b0b12] to-[#11111a] text-[#f2efff] flex items-center justify-center p-4">
@@ -143,7 +179,8 @@ export default function RegisterPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
                   required
-                  className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-[#f2efff] placeholder-[#857ca2]/50 focus:outline-none focus:border-[#a78bfa]/50 transition-colors"
+                  disabled={loading}
+                  className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-[#f2efff] placeholder-[#857ca2]/50 focus:outline-none focus:border-[#a78bfa]/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
             </div>
@@ -158,7 +195,8 @@ export default function RegisterPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="w-full pl-11 pr-12 py-3 bg-white/5 border border-white/10 rounded-xl text-[#f2efff] placeholder-[#857ca2]/50 focus:outline-none focus:border-[#a78bfa]/50 transition-colors"
+                  disabled={loading}
+                  className="w-full pl-11 pr-12 py-3 bg-white/5 border border-white/10 rounded-xl text-[#f2efff] placeholder-[#857ca2]/50 focus:outline-none focus:border-[#a78bfa]/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <button
                   type="button"
@@ -180,7 +218,8 @@ export default function RegisterPage() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-[#f2efff] placeholder-[#857ca2]/50 focus:outline-none focus:border-[#a78bfa]/50 transition-colors"
+                  disabled={loading}
+                  className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-[#f2efff] placeholder-[#857ca2]/50 focus:outline-none focus:border-[#a78bfa]/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
             </div>

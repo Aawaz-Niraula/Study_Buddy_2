@@ -1,9 +1,9 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowLeft, ChevronRight, ChevronLeft, X, Clock } from "lucide-react";
+import { ChevronRight, ChevronLeft, X, Clock, Loader2 } from "lucide-react";
 import { BottomSheet } from "./BottomSheet";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface Question {
   question?: string;
@@ -42,25 +42,24 @@ export function TestScreen({
   timerMinutes,
 }: TestScreenProps) {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [timeLeft, setTimeLeft] = useState<number | null>(
     timerMinutes ? timerMinutes * 60 : null
   );
   const [timeIsUp, setTimeIsUp] = useState(false);
   
-  // Use ref for onSubmit to avoid re-renders
   const onSubmitRef = useRef(onSubmit);
   onSubmitRef.current = onSubmit;
 
   const question = questions[currentIndex];
   const progress = ((currentIndex + 1) / totalQuestions) * 100;
 
-  // Timer logic - using ref to avoid dependency issues
+  // Timer logic
   useEffect(() => {
     if (timeLeft === null) return;
 
     if (timeLeft <= 0) {
       setTimeIsUp(true);
-      // Show "Time is up!" briefly, then auto-submit
       const timeout = setTimeout(() => {
         onSubmitRef.current();
       }, 1500);
@@ -100,11 +99,20 @@ export function TestScreen({
     onExit();
   };
 
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    try {
+      await onSubmit();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#06060b] via-[#0b0b12] to-[#11111a] text-[#f2efff] pb-24">
       {/* Header */}
       <div className="fixed top-0 left-0 right-0 z-30 bg-[#06060b]/80 backdrop-blur-sm border-b border-white/10">
-        <div className="max-w-3xl mx-auto px-4 py-4">
+        <div className="max-w-3xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center justify-between mb-3">
             <div className="text-xs text-[#857ca2] uppercase tracking-wider">
               Test Mode
@@ -127,9 +135,10 @@ export function TestScreen({
               )}
               
               <motion.button
-                whileTap={{ opacity: 0.6 }}
+                whileTap={{ scale: 0.9, opacity: 0.6 }}
                 onClick={handleExit}
-                className="p-2 rounded-full hover:bg-white/5 transition-colors"
+                disabled={submitting}
+                className="p-2 rounded-full hover:bg-white/5 active:bg-white/10 transition-colors disabled:opacity-40"
                 aria-label="Exit test"
               >
                 <X className="w-5 h-5 text-[#f87171]" />
@@ -158,7 +167,7 @@ export function TestScreen({
       </div>
 
       {/* Question Content */}
-      <div className="pt-32 px-4 pb-8 max-w-3xl mx-auto">
+      <div className="pt-28 sm:pt-32 px-3 sm:px-4 pb-8 max-w-3xl mx-auto">
         <motion.div
           key={currentIndex}
           initial={{ opacity: 0, x: 20 }}
@@ -182,11 +191,12 @@ export function TestScreen({
                   <motion.button
                     key={idx}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => onAnswer(letter)}
-                    className={`w-full text-left p-4 rounded-xl transition-all ${
+                    onClick={() => !submitting && onAnswer(letter)}
+                    disabled={submitting}
+                    className={`w-full text-left p-4 rounded-xl transition-all disabled:cursor-not-allowed ${
                       isSelected
                         ? "bg-[#a78bfa]/20 border-[#a78bfa]/50 border-2"
-                        : "bg-white/5 border border-white/10 hover:bg-white/8"
+                        : "bg-white/5 border border-white/10 hover:bg-white/8 active:bg-white/12"
                     }`}
                   >
                     <div className="text-[#f2efff]">{option}</div>
@@ -205,11 +215,12 @@ export function TestScreen({
                   <motion.button
                     key={option}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => onAnswer(option)}
-                    className={`flex-1 min-h-[56px] px-6 py-4 rounded-xl font-medium transition-all ${
+                    onClick={() => !submitting && onAnswer(option)}
+                    disabled={submitting}
+                    className={`flex-1 min-h-[56px] px-6 py-4 rounded-xl font-medium transition-all disabled:cursor-not-allowed ${
                       isSelected
                         ? "bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] text-white"
-                        : "bg-white/5 border border-white/10 text-[#ddd6fe] hover:bg-white/8"
+                        : "bg-white/5 border border-white/10 text-[#ddd6fe] hover:bg-white/8 active:bg-white/12"
                     }`}
                   >
                     {option}
@@ -224,7 +235,8 @@ export function TestScreen({
               value={answer || ""}
               onChange={(e) => onAnswer(e.target.value)}
               placeholder="Type your answer here..."
-              className="w-full min-h-[160px] bg-[#11111a] border-none rounded-xl px-4 py-3 text-[#f2efff] resize-none focus:outline-none focus:ring-2 focus:ring-[#a78bfa]/40 placeholder-[#857ca2]"
+              disabled={submitting}
+              className="w-full min-h-[160px] bg-[#11111a] border-none rounded-xl px-4 py-3 text-[#f2efff] resize-none focus:outline-none focus:ring-2 focus:ring-[#a78bfa]/40 placeholder-[#857ca2] disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ fontFamily: "inherit", lineHeight: "1.7" }}
             />
           )}
@@ -232,16 +244,16 @@ export function TestScreen({
       </div>
 
       {/* Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-[#0b0b12] border-t border-white/10 p-4">
-        <div className="max-w-3xl mx-auto flex items-center gap-3">
+      <div className="fixed bottom-0 left-0 right-0 bg-[#0b0b12] border-t border-white/10 p-3 sm:p-4">
+        <div className="max-w-3xl mx-auto flex items-center gap-2 sm:gap-3">
           <motion.button
-            whileTap={{ opacity: 0.6 }}
+            whileTap={{ scale: 0.95, opacity: 0.6 }}
             onClick={onPrevious}
-            disabled={currentIndex === 0}
+            disabled={currentIndex === 0 || submitting}
             className={`flex-1 min-h-[48px] px-6 py-3 rounded-xl font-medium border transition-all ${
-              currentIndex === 0
+              currentIndex === 0 || submitting
                 ? "border-white/10 text-[#857ca2] opacity-50 cursor-not-allowed"
-                : "border-white/20 text-[#ddd6fe] hover:bg-white/5"
+                : "border-white/20 text-[#ddd6fe] hover:bg-white/5 active:bg-white/10"
             }`}
           >
             <div className="flex items-center justify-center gap-2">
@@ -251,13 +263,25 @@ export function TestScreen({
           </motion.button>
 
           <motion.button
-            whileTap={{ opacity: 0.6 }}
-            onClick={isLastQuestion ? onSubmit : onNext}
-            className="flex-1 min-h-[48px] px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] text-white"
+            whileTap={{ scale: submitting ? 1 : 0.95, opacity: submitting ? 1 : 0.8 }}
+            onClick={isLastQuestion ? handleSubmit : onNext}
+            disabled={submitting}
+            className="flex-1 min-h-[48px] px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] text-white disabled:opacity-70 disabled:cursor-not-allowed"
           >
             <div className="flex items-center justify-center gap-2">
-              {isLastQuestion ? "SUBMIT TEST" : "NEXT"}
-              {!isLastQuestion && <ChevronRight className="w-5 h-5" />}
+              {submitting ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  SUBMITTING...
+                </>
+              ) : isLastQuestion ? (
+                "SUBMIT TEST"
+              ) : (
+                <>
+                  NEXT
+                  <ChevronRight className="w-5 h-5" />
+                </>
+              )}
             </div>
           </motion.button>
         </div>
@@ -272,16 +296,16 @@ export function TestScreen({
           </p>
           <div className="flex gap-3">
             <motion.button
-              whileTap={{ opacity: 0.6 }}
+              whileTap={{ scale: 0.95, opacity: 0.6 }}
               onClick={() => setShowExitConfirm(false)}
-              className="flex-1 min-h-[48px] px-6 py-3 rounded-xl border border-white/20 text-[#ddd6fe] font-medium"
+              className="flex-1 min-h-[48px] px-6 py-3 rounded-xl border border-white/20 text-[#ddd6fe] font-medium hover:bg-white/5 active:bg-white/10"
             >
               Cancel
             </motion.button>
             <motion.button
-              whileTap={{ opacity: 0.6 }}
+              whileTap={{ scale: 0.95, opacity: 0.6 }}
               onClick={confirmExit}
-              className="flex-1 min-h-[48px] px-6 py-3 rounded-xl bg-[#f87171] text-white font-bold"
+              className="flex-1 min-h-[48px] px-6 py-3 rounded-xl bg-[#f87171] text-white font-bold active:bg-[#dc2626]"
             >
               Exit
             </motion.button>

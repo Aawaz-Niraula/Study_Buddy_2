@@ -1,4 +1,5 @@
 import { createClient } from "@libsql/client";
+import { getAuthenticatedUserId } from "@/lib/supabase-api-auth";
 
 const TEXT_MODEL = "llama-3.1-8b-instant";
 const VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
@@ -33,6 +34,7 @@ type SourcePayload =
 
 let schemaReadyPromise: Promise<unknown> | undefined;
 
+// ─── Helpers ───────────────────────────────────────────────────
 function makeResponse(status: number, body: unknown) {
   return Response.json(body, {
     status,
@@ -100,6 +102,7 @@ function parseModelJson(rawContent: string) {
   return JSON.parse(stripped.slice(start, end + 1));
 }
 
+// ─── Database ──────────────────────────────────────────────────
 function getDbClient() {
   if (!process.env.TURSO_DATABASE_URL || !process.env.TURSO_AUTH_TOKEN) return null;
   return createClient({ url: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN });
@@ -111,6 +114,7 @@ async function ensureSchema(db: ReturnType<typeof createClient> | null) {
     schemaReadyPromise = (async () => {
       await db.execute(`CREATE TABLE IF NOT EXISTS app_sessions (
         id TEXT PRIMARY KEY,
+        user_id TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         title TEXT NOT NULL,
@@ -122,6 +126,12 @@ async function ensureSchema(db: ReturnType<typeof createClient> | null) {
         latest_difficulty TEXT NOT NULL
       )`);
       await db.execute(`CREATE INDEX IF NOT EXISTS idx_app_sessions_updated_at ON app_sessions(updated_at DESC)`);
+      await db.execute(`CREATE INDEX IF NOT EXISTS idx_app_sessions_user_id ON app_sessions(user_id)`);
+      // Add user_id column if missing (for existing tables)
+      try {
+        await db.execute(`ALTER TABLE app_sessions ADD COLUMN user_id TEXT`);
+      } catch {}
+      // Add test_submissions_json column if missing
       try {
         await db.execute(`ALTER TABLE app_sessions ADD COLUMN test_submissions_json TEXT NOT NULL DEFAULT '[]'`);
       } catch {}
@@ -152,11 +162,15 @@ function detectSourceKind(text: string, attachments: AttachmentPayload[]) {
   throw new Error("Unsupported attachment type.");
 }
 
-async function listSessions() {
+// ─── User-scoped data functions ────────────────────────────────
+async function listSessions(userId: string) {
   const db = getDbClient();
   if (!db) return [];
   await ensureSchema(db);
-  const result = await db.execute(`SELECT id, created_at, updated_at, title, source_kind, latest_mode, latest_difficulty FROM app_sessions ORDER BY updated_at DESC LIMIT 50`);
+  const result = await db.execute({
+    sql: `SELECT id, created_at, updated_at, title, source_kind, latest_mode, latest_difficulty FROM app_sessions WHERE user_id = ? ORDER BY updated_at DESC LIMIT 50`,
+    args: [userId],
+  });
   return result.rows.map((row) => ({
     id: String(row.id),
     created_at: String(row.created_at),
@@ -168,13 +182,13 @@ async function listSessions() {
   }));
 }
 
-async function getSessionById(id: string) {
+async function getSessionById(id: string, userId: string) {
   const db = getDbClient();
   if (!db) return null;
   await ensureSchema(db);
   const result = await db.execute({
-    sql: `SELECT * FROM app_sessions WHERE id = ? LIMIT 1`,
-    args: [id],
+    sql: `SELECT * FROM app_sessions WHERE id = ? AND user_id = ? LIMIT 1`,
+    args: [id, userId],
   });
   const row = result.rows[0];
   if (!row) return null;
@@ -195,14 +209,15 @@ async function getSessionById(id: string) {
   };
 }
 
-async function deleteSession(id: string) {
+async function deleteSession(id: string, userId: string) {
   const db = getDbClient();
   if (!db) return;
   await ensureSchema(db);
-  await db.execute({ sql: `DELETE FROM app_sessions WHERE id = ?`, args: [id] });
+  await db.execute({ sql: `DELETE FROM app_sessions WHERE id = ? AND user_id = ?`, args: [id, userId] });
 }
 
 async function saveGeneration({
+  userId,
   sessionId,
   sourceKind,
   sourcePayload,
@@ -211,6 +226,7 @@ async function saveGeneration({
   modelUsed,
   questions,
 }: {
+  userId: string;
   sessionId: string | null;
   sourceKind: string;
   sourcePayload: SourcePayload;
@@ -234,43 +250,46 @@ async function saveGeneration({
   };
 
   if (sessionId) {
-    const existing = await getSessionById(sessionId);
+    const existing = await getSessionById(sessionId, userId);
     if (!existing) throw new Error("Session not found.");
     const generations = [...existing.generations, generation];
     await db.execute({
-      sql: `UPDATE app_sessions SET updated_at = ?, title = ?, source_payload_json = ?, generations_json = ?, latest_mode = ?, latest_difficulty = ? WHERE id = ?`,
-      args: [now, summarizeTitle(sourceKind, sourcePayload), JSON.stringify(sourcePayload), JSON.stringify(generations), mode, difficulty, sessionId],
+      sql: `UPDATE app_sessions SET updated_at = ?, title = ?, source_payload_json = ?, generations_json = ?, latest_mode = ?, latest_difficulty = ? WHERE id = ? AND user_id = ?`,
+      args: [now, summarizeTitle(sourceKind, sourcePayload), JSON.stringify(sourcePayload), JSON.stringify(generations), mode, difficulty, sessionId, userId],
     });
     return { sessionId, stored: true };
   }
 
   const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   await db.execute({
-    sql: `INSERT INTO app_sessions (id, created_at, updated_at, title, source_kind, source_payload_json, generations_json, latest_mode, latest_difficulty) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [id, now, now, summarizeTitle(sourceKind, sourcePayload), sourceKind, JSON.stringify(sourcePayload), JSON.stringify([generation]), mode, difficulty],
+    sql: `INSERT INTO app_sessions (id, user_id, created_at, updated_at, title, source_kind, source_payload_json, generations_json, latest_mode, latest_difficulty) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, userId, now, now, summarizeTitle(sourceKind, sourcePayload), sourceKind, JSON.stringify(sourcePayload), JSON.stringify([generation]), mode, difficulty],
   });
   return { sessionId: id, stored: true };
 }
 
 async function saveTestSubmission({
+  userId,
   sessionId,
   submission,
 }: {
+  userId: string;
   sessionId: string;
   submission: Record<string, unknown>;
 }) {
   const db = getDbClient();
   if (!db) return;
   await ensureSchema(db);
-  const existing = await getSessionById(sessionId);
+  const existing = await getSessionById(sessionId, userId);
   if (!existing) throw new Error("Session not found.");
   const submissions = [...(existing.test_submissions ?? []), submission];
   await db.execute({
-    sql: `UPDATE app_sessions SET updated_at = ?, test_submissions_json = ? WHERE id = ?`,
-    args: [new Date().toISOString(), JSON.stringify(submissions), sessionId],
+    sql: `UPDATE app_sessions SET updated_at = ?, test_submissions_json = ? WHERE id = ? AND user_id = ?`,
+    args: [new Date().toISOString(), JSON.stringify(submissions), sessionId, userId],
   });
 }
 
+// ─── AI calls ──────────────────────────────────────────────────
 async function callGroq({ apiKey, model, messages, maxTokens = 2048 }: { apiKey: string; model: string; messages: unknown[]; maxTokens?: number }) {
   const upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
@@ -319,7 +338,7 @@ async function generateQuestions({
   const attachments = Array.isArray((sourcePayload as { attachments?: AttachmentPayload[] }).attachments)
     ? (sourcePayload as { attachments: AttachmentPayload[] }).attachments
     : [];
-  const imageParts = attachments.slice(0, 5).map((item) => ({ type: "image_url", image_url: { url: item.dataUrl } }));
+  const imageParts = attachments.slice(0, 3).map((item) => ({ type: "image_url", image_url: { url: item.dataUrl } }));
   if (!imageParts.length) throw new Error("No usable images were found.");
   const questions = normalizeQuestionSet(await callGroqJson({
     apiKey,
@@ -362,10 +381,12 @@ async function generateTest({
   apiKey,
   session,
   includePrevious,
+  userId,
 }: {
   apiKey: string;
   session: Awaited<ReturnType<typeof getSessionById>>;
   includePrevious: boolean;
+  userId: string;
 }) {
   if (!session) throw new Error("Session not found.");
   const sourceKind = session.source_kind;
@@ -380,11 +401,11 @@ async function generateTest({
 
   let previousContext = "";
   if (includePrevious) {
-    const sessions = await listSessions();
+    const sessions = await listSessions(userId);
     const others = [];
     for (const item of sessions) {
       if (item.id === session.id) continue;
-      const full = await getSessionById(item.id);
+      const full = await getSessionById(item.id, userId);
       if (full) others.push(full);
       if (others.length >= 4) break;
     }
@@ -411,7 +432,7 @@ ${contextText}${previousContext}`;
         model: VISION_MODEL,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: [{ type: "text", text: prompt }, ...((sourcePayload as { attachments?: AttachmentPayload[] }).attachments ?? []).slice(0, 5).map((item) => ({ type: "image_url", image_url: { url: item.dataUrl } }))] },
+          { role: "user", content: [{ type: "text", text: prompt }, ...((sourcePayload as { attachments?: AttachmentPayload[] }).attachments ?? []).slice(0, 3).map((item) => ({ type: "image_url", image_url: { url: item.dataUrl } }))] },
         ],
         maxTokens: 2500,
       }))
@@ -463,20 +484,24 @@ ${JSON.stringify(questions.map((q, i) => ({ index: i, question: q.question, expe
   };
 }
 
+// ─── Route handlers ────────────────────────────────────────────
 export async function OPTIONS() {
   return makeResponse(200, {});
 }
 
 export async function GET(request: Request) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return makeResponse(200, { sessions: [] });
+
     const url = new URL(request.url);
     const sessionId = url.searchParams.get("sessionId");
     if (sessionId) {
-      const session = await getSessionById(sessionId);
+      const session = await getSessionById(sessionId, userId);
       if (!session) return makeResponse(404, { detail: "Session not found" });
       return makeResponse(200, { session });
     }
-    return makeResponse(200, { sessions: await listSessions() });
+    return makeResponse(200, { sessions: await listSessions(userId) });
   } catch (error) {
     return makeResponse(500, { detail: error instanceof Error ? error.message : "Server error" });
   }
@@ -484,10 +509,13 @@ export async function GET(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return makeResponse(401, { detail: "Sign in to manage sessions." });
+
     const url = new URL(request.url);
     const sessionId = url.searchParams.get("sessionId");
     if (!sessionId) return makeResponse(400, { detail: "sessionId is required" });
-    await deleteSession(sessionId);
+    await deleteSession(sessionId, userId);
     return makeResponse(200, { ok: true });
   } catch (error) {
     return makeResponse(500, { detail: error instanceof Error ? error.message : "Server error" });
@@ -497,6 +525,9 @@ export async function DELETE(request: Request) {
 export async function POST(request: Request) {
   try {
     if (!process.env.GROQ_API_KEY) return makeResponse(500, { detail: "GROQ_API_KEY not configured" });
+
+    const userId = await getAuthenticatedUserId();
+    if (!userId) return makeResponse(401, { detail: "Sign in to use Study Buddy." });
 
     const body = await request.json().catch(() => null);
     if (!body) return makeResponse(400, { detail: "Invalid JSON body" });
@@ -510,12 +541,13 @@ export async function POST(request: Request) {
 
     if (action === "generate_test") {
       if (!sessionId) return makeResponse(422, { detail: "sessionId is required for tests." });
-      const session = await getSessionById(sessionId);
+      const session = await getSessionById(sessionId, userId);
       if (!session) return makeResponse(404, { detail: "Session not found" });
       const testQuestions = await generateTest({
         apiKey: process.env.GROQ_API_KEY,
         session,
         includePrevious: Boolean((body as { includePrevious?: boolean }).includePrevious),
+        userId,
       });
       return makeResponse(200, { questions: testQuestions });
     }
@@ -524,7 +556,7 @@ export async function POST(request: Request) {
       if (!sessionId) return makeResponse(422, { detail: "sessionId is required for test submission." });
       const submission = (body as { submission?: Record<string, unknown> }).submission;
       if (!submission) return makeResponse(422, { detail: "submission is required." });
-      await saveTestSubmission({ sessionId, submission });
+      await saveTestSubmission({ userId, sessionId, submission });
       return makeResponse(200, { ok: true });
     }
 
@@ -545,13 +577,17 @@ export async function POST(request: Request) {
     let sourcePayload: SourcePayload;
 
     if (sessionId) {
-      const existing = await getSessionById(sessionId);
+      const existing = await getSessionById(sessionId, userId);
       if (!existing) return makeResponse(404, { detail: "Session not found" });
       sourceKind = existing.source_kind;
       sourcePayload = existing.source_payload as SourcePayload;
     } else {
       sourceKind = detectSourceKind(text, attachments);
       if (!sourceKind) return makeResponse(422, { detail: "Please add notes, one PDF, or one or more photos." });
+      const imageCount = attachments.filter((a) => a?.type === "image").length;
+      if (sourceKind === "image" && imageCount > 3) {
+        return makeResponse(422, { detail: "Maximum 3 images per request." });
+      }
       if (sourceKind === "pdf" && attachments.length !== 1) return makeResponse(422, { detail: "Only one PDF can be used in a session." });
       sourcePayload = sourceKind === "text"
         ? { text }
@@ -568,7 +604,7 @@ export async function POST(request: Request) {
       difficulty,
     });
 
-    const saved = await saveGeneration({ sessionId, sourceKind, sourcePayload, mode, difficulty, modelUsed, questions });
+    const saved = await saveGeneration({ userId, sessionId, sourceKind, sourcePayload, mode, difficulty, modelUsed, questions });
     return makeResponse(200, { questions, sessionId: saved.sessionId, sourceKind, latestMode: mode, latestDifficulty: difficulty });
   } catch (error) {
     return makeResponse(500, { detail: error instanceof Error ? error.message : "Server error" });
