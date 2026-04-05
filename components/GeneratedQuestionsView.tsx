@@ -8,6 +8,8 @@ interface Question {
   question?: string;
   statement?: string;
   answer?: string;
+  expected_answer?: string;
+  expectedAnswer?: string;
   options?: string[];
   front?: string;
   back?: string;
@@ -44,6 +46,9 @@ export function GeneratedQuestionsView({
       return newSet;
     });
   };
+
+  const getAnswerText = (data: Question) =>
+    data.answer ?? data.expected_answer ?? data.expectedAnswer ?? data.back ?? "No answer provided";
 
   const allQuestions: Array<{ type: string; data: Question; key: string }> = [];
 
@@ -136,7 +141,13 @@ export function GeneratedQuestionsView({
                   onClick={() => toggleAnswer(key)}
                   className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] text-white rounded-xl text-sm font-medium"
                 >
-                  {isRevealed ? "Hide Answer" : "Reveal Answer"}
+                  {isRevealed
+                    ? type === "Short Answer"
+                      ? "Hide Expected Answer"
+                      : "Hide Answer"
+                    : type === "Short Answer"
+                      ? "Show Expected Answer"
+                      : "Reveal Answer"}
                   <ChevronDown
                     className={`w-4 h-4 transition-transform ${
                       isRevealed ? "rotate-180" : ""
@@ -156,10 +167,10 @@ export function GeneratedQuestionsView({
                 >
                   <div className="flex items-start gap-2">
                     <span className="text-xs font-medium text-[#22c55e] uppercase tracking-wide">
-                      Answer:
+                      {type === "Short Answer" ? "Expected answer:" : "Answer:"}
                     </span>
                     <span className="text-[#f2efff] leading-relaxed flex-1">
-                      {((data as any).answer ?? (data as any).expected_answer ?? (data as any).expectedAnswer ?? (data as any).back) || "No answer provided"}
+                      {getAnswerText(data)}
                     </span>
                   </div>
                 </motion.div>

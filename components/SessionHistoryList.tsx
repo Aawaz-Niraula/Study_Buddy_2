@@ -1,7 +1,15 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { FileText, Image as ImageIcon, FileImage, Sparkles, FolderOpen } from "lucide-react";
+import {
+  FileText,
+  Image as ImageIcon,
+  FileImage,
+  Sparkles,
+  FolderOpen,
+  Trash2,
+  Loader2,
+} from "lucide-react";
 
 export interface SessionItem {
   id: string;
@@ -27,7 +35,10 @@ interface SessionHistoryListProps {
   activeGenerationId: string | null;
   onSelectSession: (id: string) => void;
   onSelectGeneration: (id: string) => void;
+  onDeleteSession?: (id: string) => void;
   loading?: boolean;
+  actionLoading?: boolean;
+  deletingSessionId?: string | null;
 }
 
 export function SessionHistoryList({
@@ -38,12 +49,15 @@ export function SessionHistoryList({
   activeGenerationId,
   onSelectSession,
   onSelectGeneration,
+  onDeleteSession,
   loading,
+  actionLoading,
+  deletingSessionId,
 }: SessionHistoryListProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="w-8 h-8 border-2 border-[#a78bfa] border-t-transparent rounded-full animate-spin" />
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#a78bfa] border-t-transparent" />
       </div>
     );
   }
@@ -55,45 +69,41 @@ export function SessionHistoryList({
   };
 
   const hasCurrentSession = currentGenerations.length > 0 || currentSessionId;
-  const hasHistory = sessions.length > 0;
+  const previousSessions = sessions.filter((session) => session.id !== currentSessionId);
 
-  if (!hasCurrentSession && !hasHistory) {
+  if (!hasCurrentSession && previousSessions.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-        <div className="p-4 bg-[#a78bfa]/10 rounded-full mb-4">
-          <FolderOpen className="w-12 h-12 text-[#a78bfa] opacity-70" />
+      <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+        <div className="mb-4 rounded-full bg-[#a78bfa]/10 p-4">
+          <FolderOpen className="h-12 w-12 text-[#a78bfa] opacity-70" />
         </div>
-        <p className="text-[#f2efff] font-medium mb-2">No sessions yet</p>
-        <p className="text-[#857ca2] text-sm mb-6 max-w-[250px]">
-          Add notes or upload files and generate questions to create your first session
+        <p className="mb-2 font-medium text-[#f2efff]">No sessions yet</p>
+        <p className="mb-6 max-w-[250px] text-sm text-[#857ca2]">
+          Add notes or upload files and generate questions to create your first session.
         </p>
-        <div className="w-full max-w-[200px] h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+        <div className="h-px w-full max-w-[200px] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Current Session Section */}
       {hasCurrentSession && (
         <div className="space-y-3">
           <div className="flex items-center gap-2 px-2">
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-            <p className="text-xs text-[#857ca2] uppercase tracking-wide">
-              Current Session
-            </p>
+            <div className="h-2 w-2 animate-pulse rounded-full bg-green-400" />
+            <p className="text-xs uppercase tracking-wide text-[#857ca2]">Current Session</p>
           </div>
-          
-          <div className="p-3 bg-gradient-to-r from-[#a78bfa]/10 to-[#f9a8d4]/10 border border-[#a78bfa]/20 rounded-xl">
-            <p className="text-sm font-medium text-[#f2efff] mb-1 truncate">
+
+          <div className="rounded-xl border border-[#a78bfa]/20 bg-gradient-to-r from-[#a78bfa]/10 to-[#f9a8d4]/10 p-3">
+            <p className="mb-1 truncate text-sm font-medium text-[#f2efff]">
               {currentSessionTitle || "New Session"}
             </p>
             <p className="text-xs text-[#857ca2]">
-              {currentGenerations.length} generation{currentGenerations.length !== 1 ? "s" : ""}
+              {currentGenerations.length} generation{currentGenerations.length === 1 ? "" : "s"}
             </p>
           </div>
 
-          {/* Generation list in current session */}
           {currentGenerations.length > 0 && (
             <div className="space-y-2 pl-2">
               {currentGenerations.map((gen, index) => {
@@ -108,20 +118,20 @@ export function SessionHistoryList({
                     key={gen.id}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => onSelectGeneration(gen.id)}
-                    className={`w-full text-left p-3 rounded-lg transition-all ${
+                    className={`w-full rounded-lg p-3 text-left transition-all ${
                       isActive
-                        ? "bg-[#a78bfa]/20 border border-[#a78bfa]/50"
-                        : "bg-white/5 border border-transparent hover:bg-white/8"
+                        ? "border border-[#a78bfa]/50 bg-[#a78bfa]/20"
+                        : "border border-transparent bg-white/5 hover:bg-white/8"
                     }`}
                   >
                     <div className="flex items-center gap-2">
-                      <Sparkles className={`w-4 h-4 ${isActive ? "text-[#a78bfa]" : "text-[#857ca2]"}`} />
+                      <Sparkles className={`h-4 w-4 ${isActive ? "text-[#a78bfa]" : "text-[#857ca2]"}`} />
                       <span className={`text-sm ${isActive ? "text-[#a78bfa]" : "text-[#f2efff]"}`}>
                         Gen #{currentGenerations.length - index}
                       </span>
-                      <span className="text-xs text-[#857ca2] ml-auto">{timeStr}</span>
+                      <span className="ml-auto text-xs text-[#857ca2]">{timeStr}</span>
                     </div>
-                    <div className="flex items-center gap-2 mt-1 ml-6">
+                    <div className="mt-1 ml-6 flex items-center gap-2">
                       <span className="text-xs text-[#a78bfa]">{gen.difficulty}</span>
                       <span className="text-xs text-[#857ca2]">• {gen.questionCount} Q</span>
                     </div>
@@ -133,15 +143,14 @@ export function SessionHistoryList({
         </div>
       )}
 
-      {/* Previous Sessions Section */}
-      {hasHistory && (
+      {previousSessions.length > 0 && (
         <div className="space-y-3">
-          <p className="text-xs text-[#857ca2] uppercase tracking-wide px-2">
-            Previous Sessions ({sessions.length})
+          <p className="px-2 text-xs uppercase tracking-wide text-[#857ca2]">
+            Previous Sessions ({previousSessions.length})
           </p>
 
           <div className="space-y-2">
-            {sessions.filter(s => s.id !== currentSessionId).map((session, idx) => {
+            {previousSessions.map((session, idx) => {
               const Icon = getIcon(session.source_kind);
               const date = new Date(session.updated_at).toLocaleDateString("en-US", {
                 month: "short",
@@ -149,35 +158,52 @@ export function SessionHistoryList({
               });
 
               return (
-                <motion.button
-                  key={session.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: idx * 0.03 }}
-                  whileTap={{ opacity: 0.6, scale: 0.98 }}
-                  onClick={() => onSelectSession(session.id)}
-                  className="w-full text-left p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/8 hover:border-white/20 transition-all"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 rounded-lg bg-[#a78bfa]/10">
-                      <Icon className="w-4 h-4 text-[#a78bfa]" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-medium text-[#f2efff] truncate">
-                        {session.title || "Untitled"}
-                      </h3>
-                      <div className="flex items-center gap-2 text-xs text-[#857ca2]">
-                        <span>{date}</span>
-                        {session.questionCount !== undefined && (
-                          <>
-                            <span>•</span>
-                            <span>{session.questionCount} Q</span>
-                          </>
-                        )}
+                <div key={session.id} className="flex items-stretch gap-2">
+                  <motion.button
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.03 }}
+                    whileTap={{ opacity: 0.6, scale: 0.98 }}
+                    onClick={() => onSelectSession(session.id)}
+                    className="flex-1 rounded-xl border border-white/10 bg-white/5 p-3 text-left transition-all hover:border-white/20 hover:bg-white/8"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-lg bg-[#a78bfa]/10 p-2">
+                        <Icon className="h-4 w-4 text-[#a78bfa]" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="truncate text-sm font-medium text-[#f2efff]">
+                          {session.title || "Untitled"}
+                        </h3>
+                        <div className="flex items-center gap-2 text-xs text-[#857ca2]">
+                          <span>{date}</span>
+                          {session.questionCount !== undefined && (
+                            <>
+                              <span>•</span>
+                              <span>{session.questionCount} Q</span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </motion.button>
+                  </motion.button>
+
+                  {onDeleteSession && (
+                    <button
+                      type="button"
+                      onClick={() => onDeleteSession(session.id)}
+                      disabled={actionLoading || deletingSessionId === session.id}
+                      className="flex w-11 items-center justify-center rounded-xl border border-red-500/20 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+                      aria-label={`Delete ${session.title || "session"}`}
+                    >
+                      {deletingSessionId === session.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>
