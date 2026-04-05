@@ -19,7 +19,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/lib/useAuth";
 import { compressImage, fileToCompressedDataUrl } from "@/lib/imageCompression";
 import { toast } from "sonner";
-import { upload } from "@vercel/blob/client";
 
 declare global {
   interface Window {
@@ -257,33 +256,23 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.id]);
 
-  // ─── PDF: direct client upload to Vercel Blob (avoids ~4.5MB serverless body limit) ──
+  // ─── PDF Upload via Vercel Blob ──────────────────────────────
   const uploadPdfViaBlob = async (file: File): Promise<string> => {
     setUploadStatus("Uploading PDF...");
-    const blob = await upload(file.name, file, {
-      access: "public",
-      handleUploadUrl: "/api/blob/upload",
-      multipart: file.size > 5 * 1024 * 1024,
-      onUploadProgress: (ev) => {
-        setUploadStatus(`Uploading PDF... ${Math.round(ev.percentage)}%`);
-      },
-    });
+    const formData = new FormData();
+    formData.append("file", file);
 
-    setUploadStatus("Extracting text from PDF...");
-    const res = await fetch("/api/upload-pdf/process", {
+    const res = await fetch("/api/upload-pdf", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: blob.url }),
+      body: formData,
     });
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(
-        typeof data.error === "string" ? data.error : "Failed to process PDF. Try again."
-      );
+      throw new Error(data.error || "Failed to upload PDF");
     }
 
-    setUploadStatus(`Extracted text from ${data.pages ?? "?"} pages.`);
+    setUploadStatus(`Extracted text from ${data.pages || "?"} pages.`);
     return data.text || "";
   };
 
@@ -1026,7 +1015,6 @@ export default function Home() {
               onGenerate={generate}
               loading={loading}
               uploading={uploading}
-              actionLoading={actionLoading}
               error={error}
               uploadStatus={uploadStatus}
             />
@@ -1095,8 +1083,8 @@ export default function Home() {
       {/* Test Options Bottom Sheet */}
       <BottomSheet isOpen={testOptionsOpen} onClose={() => setTestOptionsOpen(false)}>
         <TestOptionsSheet
-          pending={loading}
           onSelect={(optionId, timerMins) => {
+            setTestOptionsOpen(false);
             startTest(optionId, timerMins);
           }}
         />

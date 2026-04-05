@@ -25,7 +25,6 @@ interface SessionFormProps {
   onGenerate: () => void;
   loading: boolean;
   uploading?: boolean;
-  actionLoading?: boolean;
   error: string;
   uploadStatus: string;
 }
@@ -54,7 +53,6 @@ export function SessionForm({
   onGenerate,
   loading,
   uploading,
-  actionLoading = false,
   error,
   uploadStatus,
 }: SessionFormProps) {
@@ -63,7 +61,7 @@ export function SessionForm({
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const hasInput = text.trim() || attachments.length > 0;
-  const isDisabled = loading || uploading || actionLoading;
+  const isDisabled = loading || uploading;
 
   // Auto-expand step 2 when input exists
   useEffect(() => {
@@ -103,7 +101,7 @@ export function SessionForm({
               whileTap={{ scale: isDisabled ? 1 : 0.95, opacity: isDisabled ? 1 : 0.6 }}
               onClick={() => !isDisabled && fileInputRef.current?.click()}
               disabled={isDisabled}
-              className="flex-1 min-h-[48px] px-4 py-2 bg-white/5 border border-white/10 rounded-full text-sm font-medium text-[#ddd6fe] hover:bg-white/8 active:scale-[0.98] active:opacity-80 transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
+              className="flex-1 min-h-[48px] px-4 py-2 bg-white/5 border border-white/10 rounded-full text-sm font-medium text-[#ddd6fe] hover:bg-white/8 active:bg-white/12 transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {uploading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -116,7 +114,7 @@ export function SessionForm({
               whileTap={{ scale: isDisabled ? 1 : 0.95, opacity: isDisabled ? 1 : 0.6 }}
               onClick={() => !isDisabled && cameraInputRef.current?.click()}
               disabled={isDisabled}
-              className="flex-1 min-h-[48px] px-4 py-2 bg-white/5 border border-white/10 rounded-full text-sm font-medium text-[#ddd6fe] hover:bg-white/8 active:scale-[0.98] active:opacity-80 transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
+              className="flex-1 min-h-[48px] px-4 py-2 bg-white/5 border border-white/10 rounded-full text-sm font-medium text-[#ddd6fe] hover:bg-white/8 active:bg-white/12 transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Camera className="w-4 h-4" />
               TAKE PHOTO
@@ -185,10 +183,8 @@ export function SessionForm({
       {/* Step 2: Options Section */}
       <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
         <button
-          type="button"
           onClick={() => setStep2Expanded(!step2Expanded)}
-          disabled={isDisabled}
-          className="w-full p-6 flex items-center justify-between hover:bg-white/5 active:bg-white/8 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full p-6 flex items-center justify-between hover:bg-white/5 active:bg-white/8 transition-colors"
         >
           <div className="flex items-center gap-3">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm ${hasInput ? "bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4]" : "bg-white/10"}`}>
@@ -304,7 +300,7 @@ export function SessionForm({
           disabled={!hasInput || isDisabled}
           className={`w-full min-h-[56px] px-6 py-4 rounded-2xl font-bold text-sm tracking-wide transition-all flex items-center justify-center gap-2 ${
             hasInput && !isDisabled
-              ? "bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] text-white shadow-lg active:scale-[0.98] active:opacity-90"
+              ? "bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] text-white shadow-lg active:shadow-md"
               : "bg-white/5 text-[#857ca2] opacity-50 cursor-not-allowed"
           }`}
         >

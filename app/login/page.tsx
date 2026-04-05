@@ -1,16 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { createClient } from "@/lib/supabase-client";
 import { motion } from "framer-motion";
 import { Mail, Lock, Eye, EyeOff, ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/useAuth";
-import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 
 export default function LoginPage() {
-  const { user, loading: authLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -18,12 +15,6 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const router = useRouter();
   const supabase = createClient();
-
-  useEffect(() => {
-    if (!authLoading && user) {
-      router.replace("/");
-    }
-  }, [authLoading, user, router]);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,14 +75,6 @@ export default function LoginPage() {
       console.error("Failed to migrate history:", err);
     }
   };
-
-  if (authLoading) {
-    return <LoadingSkeleton />;
-  }
-
-  if (user) {
-    return null;
-  }
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#06060b] via-[#0b0b12] to-[#11111a] text-[#f2efff] flex items-center justify-center p-4">

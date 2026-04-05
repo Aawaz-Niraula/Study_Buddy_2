@@ -159,7 +159,7 @@ export function GeneratedQuestionsView({
                       Answer:
                     </span>
                     <span className="text-[#f2efff] leading-relaxed flex-1">
-                      {data.answer || data.back}
+                      {((data as any).answer ?? (data as any).expected_answer ?? (data as any).expectedAnswer ?? (data as any).back) || "No answer provided"}
                     </span>
                   </div>
                 </motion.div>
