@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useAuth } from "@/lib/useAuth";
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 interface TopBarProps {
   onTestHistoryClick: () => void;
@@ -149,16 +150,24 @@ export function TopBar({ onTestHistoryClick, onSessionHistoryClick, onMenuClick 
                       {/* Menu Items */}
                       <div className="p-2">
                         <button
-                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-[#ddd6fe] hover:bg-white/5 active:bg-white/10 transition-colors"
-                          onClick={() => setMenuOpen(false)}
+                          type="button"
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-[#ddd6fe] hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+                          onClick={() => {
+                            setMenuOpen(false);
+                            toast.info("Profile isn’t available yet — coming in a future update.");
+                          }}
                         >
                           <UserCircle className="w-4 h-4 text-[#857ca2]" />
                           <span>Profile</span>
                           <span className="ml-auto text-[10px] text-[#857ca2]/60 bg-white/5 px-2 py-0.5 rounded-full">Soon</span>
                         </button>
                         <button
-                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-[#ddd6fe] hover:bg-white/5 active:bg-white/10 transition-colors"
-                          onClick={() => setMenuOpen(false)}
+                          type="button"
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-[#ddd6fe] hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+                          onClick={() => {
+                            setMenuOpen(false);
+                            toast.info("Settings aren’t available yet — coming in a future update.");
+                          }}
                         >
                           <Settings className="w-4 h-4 text-[#857ca2]" />
                           <span>Settings</span>
