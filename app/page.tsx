@@ -39,6 +39,7 @@ declare global {
 const MAX_IMAGE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB raw (will be compressed)
 const MAX_PDF_SIZE_BYTES = 15 * 1024 * 1024; // 15MB
 const MAX_IMAGES = 3;
+const MAX_GENERATE_REQUEST_BYTES = 18 * 1024 * 1024;
 
 type SourceKind = "text" | "pdf" | "image" | null;
 type Attachment = {
@@ -406,23 +407,37 @@ export default function Home() {
     setError("");
 
     try {
+      const requestBody = JSON.stringify({
+        sessionId,
+        text: sourceKind === "text" ? text : "",
+        attachments,
+        mode,
+        difficulty,
+      });
+
+      if (sourceKind === "image" && requestBody.length > MAX_GENERATE_REQUEST_BYTES) {
+        throw new Error("These photos are still too large to send together. Try smaller photos or fewer images.");
+      }
+
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId,
-          text: sourceKind === "text" ? text : "",
-          attachments,
-          mode,
-          difficulty,
-        }),
+        body: requestBody,
       });
 
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || "Could not generate questions.");
+      const raw = await res.text();
+      let data: Record<string, unknown> = {};
+      if (raw) {
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          data = {};
+        }
+      }
+      if (!res.ok) throw new Error(String(data.detail || raw || "Could not generate questions."));
 
-      setSessionId(data.sessionId ?? sessionId);
-      setQuestions(data.questions ?? null);
+      setSessionId(typeof data.sessionId === "string" ? data.sessionId : sessionId);
+      setQuestions((data.questions as QuestionSet | null | undefined) ?? null);
 
       const generationId = `${Date.now()}`;
       setGenerations((current) => [
@@ -432,7 +447,7 @@ export default function Home() {
           created_at: new Date().toISOString(),
           mode,
           difficulty,
-          questions: data.questions ?? {},
+          questions: ((data.questions as QuestionSet | null | undefined) ?? {}),
         },
       ]);
       setActiveGenerationId(generationId);
