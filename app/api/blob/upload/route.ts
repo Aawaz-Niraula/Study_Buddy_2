@@ -5,6 +5,7 @@ import { getAuthenticatedUserId } from "@/lib/supabase-api-auth";
 export const runtime = "nodejs";
 
 const MAX_PDF_BYTES = 15 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 /**
  * Client-upload handoff for Vercel Blob. Uploads go directly to Blob storage (bypasses the ~4.5MB
@@ -27,11 +28,27 @@ export async function POST(request: Request) {
     const jsonResponse = await handleUpload({
       request,
       body,
-      onBeforeGenerateToken: async () => ({
-        allowedContentTypes: ["application/pdf"],
-        maximumSizeInBytes: MAX_PDF_BYTES,
-        addRandomSuffix: true,
-      }),
+      onBeforeGenerateToken: async (_pathname, clientPayload) => {
+        let payload: { kind?: string } | null = null;
+        try {
+          payload = clientPayload ? JSON.parse(clientPayload) as { kind?: string } : null;
+        } catch {
+          payload = null;
+        }
+
+        const kind = payload?.kind === "image" ? "image" : "pdf";
+        return kind === "image"
+          ? {
+              allowedContentTypes: ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"],
+              maximumSizeInBytes: MAX_IMAGE_BYTES,
+              addRandomSuffix: true,
+            }
+          : {
+              allowedContentTypes: ["application/pdf"],
+              maximumSizeInBytes: MAX_PDF_BYTES,
+              addRandomSuffix: true,
+            };
+      },
       onUploadCompleted: async () => {
         // Extraction and blob deletion happen in /api/upload-pdf/process
       },

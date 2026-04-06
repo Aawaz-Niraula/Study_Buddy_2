@@ -1,4 +1,5 @@
 import { createClient } from "@libsql/client";
+import { del } from "@vercel/blob";
 import { getAuthenticatedUserId } from "@/lib/supabase-api-auth";
 
 const TEXT_MODEL = "llama-3.1-8b-instant";
@@ -23,6 +24,7 @@ type AttachmentPayload = {
   type?: "pdf" | "image";
   extractedText?: string;
   dataUrl?: string;
+  blobUrl?: string;
   mimeType?: string;
   origin?: "upload" | "camera";
 };
@@ -100,6 +102,37 @@ function parseModelJson(rawContent: string) {
   const end = stripped.lastIndexOf("}");
   if (start === -1 || end === -1 || end < start) throw new Error("No JSON object found in model response");
   return JSON.parse(stripped.slice(start, end + 1));
+}
+
+function getImageSourceUrl(item: AttachmentPayload) {
+  const blobUrl = typeof item.blobUrl === "string" ? item.blobUrl.trim() : "";
+  if (blobUrl) return blobUrl;
+  const dataUrl = typeof item.dataUrl === "string" ? item.dataUrl.trim() : "";
+  return dataUrl;
+}
+
+function isTrustedBlobUrl(url: string): boolean {
+  try {
+    const { hostname, protocol } = new URL(url);
+    if (protocol !== "https:") return false;
+    return (
+      hostname.endsWith(".blob.vercel-storage.com") ||
+      hostname.endsWith(".public.blob.vercel-storage.com")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function getSessionImageBlobUrls(sourcePayload: SourcePayload): string[] {
+  const attachments = Array.isArray((sourcePayload as { attachments?: AttachmentPayload[] }).attachments)
+    ? (sourcePayload as { attachments: AttachmentPayload[] }).attachments
+    : [];
+
+  return attachments
+    .filter((item) => item?.type === "image")
+    .map((item) => (typeof item.blobUrl === "string" ? item.blobUrl.trim() : ""))
+    .filter((url): url is string => Boolean(url) && isTrustedBlobUrl(url));
 }
 
 // ─── Database ──────────────────────────────────────────────────
@@ -221,6 +254,17 @@ async function deleteSession(id: string, userId: string) {
   const db = getDbClient();
   if (!db) return;
   await ensureSchema(db);
+  const existing = await getSessionById(id, userId);
+  const blobUrls = existing ? getSessionImageBlobUrls(existing.source_payload as SourcePayload) : [];
+
+  if (blobUrls.length) {
+    try {
+      await del(blobUrls);
+    } catch (error) {
+      console.error("Blob cleanup failed during session delete:", error);
+    }
+  }
+
   await db.execute({ sql: `DELETE FROM app_sessions WHERE id = ? AND user_id = ?`, args: [id, userId] });
 }
 
@@ -346,7 +390,11 @@ async function generateQuestions({
   const attachments = Array.isArray((sourcePayload as { attachments?: AttachmentPayload[] }).attachments)
     ? (sourcePayload as { attachments: AttachmentPayload[] }).attachments
     : [];
-  const imageParts = attachments.slice(0, 3).map((item) => ({ type: "image_url", image_url: { url: item.dataUrl } }));
+  const imageParts = attachments
+    .slice(0, 3)
+    .map((item) => getImageSourceUrl(item))
+    .filter(Boolean)
+    .map((url) => ({ type: "image_url", image_url: { url } }));
   if (!imageParts.length) throw new Error("No usable images were found.");
   const questions = normalizeQuestionSet(await callGroqJson({
     apiKey,
@@ -440,7 +488,17 @@ ${contextText}${previousContext}`;
         model: VISION_MODEL,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: [{ type: "text", text: prompt }, ...((sourcePayload as { attachments?: AttachmentPayload[] }).attachments ?? []).slice(0, 3).map((item) => ({ type: "image_url", image_url: { url: item.dataUrl } }))] },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: prompt },
+              ...((sourcePayload as { attachments?: AttachmentPayload[] }).attachments ?? [])
+                .slice(0, 3)
+                .map((item) => getImageSourceUrl(item))
+                .filter(Boolean)
+                .map((url) => ({ type: "image_url", image_url: { url } })),
+            ],
+          },
         ],
         maxTokens: 2500,
       }))
@@ -601,7 +659,16 @@ export async function POST(request: Request) {
         ? { text }
         : sourceKind === "pdf"
           ? { text: String(attachments[0]?.extractedText ?? ""), attachments: attachments.map((item) => ({ name: item.name, type: item.type })) }
-          : { attachments: attachments.map((item) => ({ name: item.name, type: item.type, dataUrl: item.dataUrl, mimeType: item.mimeType, origin: item.origin })) };
+          : {
+              attachments: attachments.map((item) => ({
+                name: item.name,
+                type: item.type,
+                dataUrl: item.dataUrl,
+                blobUrl: item.blobUrl,
+                mimeType: item.mimeType,
+                origin: item.origin,
+              })),
+            };
     }
 
     const { questions, modelUsed } = await generateQuestions({

@@ -16,8 +16,9 @@ import { GeneratedQuestionsView } from "@/components/GeneratedQuestionsView";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { Sparkles, CircleHelp, X, BookOpen, LayoutPanelLeft, Trophy, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { upload } from "@vercel/blob/client";
 import { useAuth } from "@/lib/useAuth";
-import { compressImage, fileToCompressedDataUrl } from "@/lib/imageCompression";
+import { compressImage } from "@/lib/imageCompression";
 import { toast } from "sonner";
 
 declare global {
@@ -39,7 +40,8 @@ declare global {
 const MAX_IMAGE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB raw (will be compressed)
 const MAX_PDF_SIZE_BYTES = 15 * 1024 * 1024; // 15MB
 const MAX_IMAGES = 3;
-const MAX_GENERATE_REQUEST_BYTES = 18 * 1024 * 1024;
+const sanitizeUploadName = (name: string) =>
+  name.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || "upload.jpg";
 
 type SourceKind = "text" | "pdf" | "image" | null;
 type Attachment = {
@@ -49,6 +51,7 @@ type Attachment = {
   extractedText?: string;
   mimeType: string;
   dataUrl?: string;
+  blobUrl?: string;
   origin: "upload" | "camera";
 };
 type QuestionSet = {
@@ -277,6 +280,20 @@ export default function Home() {
     return data.text || "";
   };
 
+  const uploadImageViaBlob = async (file: File): Promise<string> => {
+    setUploadStatus(`Uploading ${file.name}...`);
+    const safeName = sanitizeUploadName(file.name.toLowerCase().endsWith(".jpg") || file.name.toLowerCase().endsWith(".jpeg")
+      ? file.name
+      : `${file.name}.jpg`);
+    const blob = await upload(`study-buddy-images/${Date.now()}-${safeName}`, file, {
+      access: "public",
+      contentType: file.type || "image/jpeg",
+      handleUploadUrl: "/api/blob/upload",
+      clientPayload: JSON.stringify({ kind: "image" }),
+    });
+    return blob.url;
+  };
+
   // ─── File Handler ────────────────────────────────────────────
   const handleFilesAdded = async (
     event: React.ChangeEvent<HTMLInputElement>,
@@ -345,21 +362,19 @@ export default function Home() {
             origin,
           });
         } else {
-          // Compress image before creating data URL
+          // Compress image before uploading to Blob so generate requests stay small.
           setUploadStatus(`Compressing ${file.name}...`);
           const compressed = await compressImage(file, (p) => {
             setUploadStatus(`Compressing ${p.fileName}... ${p.progress}%`);
           });
-          
-          setUploadStatus(`Processing ${file.name}...`);
-          const dataUrl = await fileToCompressedDataUrl(compressed);
+          const blobUrl = await uploadImageViaBlob(compressed);
 
           parsed.push({
             id: `${file.name}-${file.size}-${file.lastModified}`,
             name: file.name,
             type: "image",
             mimeType: compressed.type || "image/jpeg",
-            dataUrl,
+            blobUrl,
             origin,
           });
         }
@@ -414,10 +429,6 @@ export default function Home() {
         mode,
         difficulty,
       });
-
-      if (sourceKind === "image" && requestBody.length > MAX_GENERATE_REQUEST_BYTES) {
-        throw new Error("These photos are still too large to send together. Try smaller photos or fewer images.");
-      }
 
       const res = await fetch("/api/generate", {
         method: "POST",
