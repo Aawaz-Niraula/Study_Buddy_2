@@ -2,10 +2,14 @@
 
 import imageCompression from "browser-image-compression";
 
-/** Groq vision payload limit per image — stay safely under 4MB. */
-const MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
-const TARGET_MAX_MB = 3.85;
-const MAX_WIDTH = 2048;
+/**
+ * Groq limits base64 image inputs to about 4MB.
+ * Base64 expands binary data, so we keep the compressed file itself closer to 3MB.
+ */
+const MAX_BASE64_BYTES = 4 * 1024 * 1024;
+const MAX_BINARY_BYTES = 3 * 1024 * 1024;
+const TARGET_MAX_MB = 2.85;
+const MAX_WIDTH = 1600;
 
 export interface CompressionProgress {
   fileName: string;
@@ -34,19 +38,19 @@ export async function compressImage(
     onProgress: (percent: number) => notify(percent),
   });
 
-  if (out.size > MAX_OUTPUT_BYTES) {
+  if (out.size > MAX_BINARY_BYTES) {
     out = await imageCompression(out, {
-      maxSizeMB: 3.5,
-      maxWidthOrHeight: 1920,
+      maxSizeMB: 2.5,
+      maxWidthOrHeight: 1280,
       useWebWorker: true,
       fileType: "image/jpeg",
       onProgress: (percent: number) => notify(50 + percent / 2),
     });
   }
 
-  if (out.size > MAX_OUTPUT_BYTES) {
+  if (out.size > MAX_BINARY_BYTES) {
     throw new Error(
-      "Could not compress image under 4MB. Try a smaller or lower-resolution photo."
+      "Could not compress image enough for AI processing. Try a smaller or lower-resolution photo."
     );
   }
 
@@ -72,10 +76,23 @@ export async function compressImages(
 export async function fileToCompressedDataUrl(file: File): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () =>
-      typeof reader.result === "string"
-        ? resolve(reader.result)
-        : reject(new Error("Could not read image file."));
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        reject(new Error("Could not read image file."));
+        return;
+      }
+
+      const [, base64 = ""] = reader.result.split(",", 2);
+      const estimatedBytes = Math.ceil((base64.length * 3) / 4);
+      if (estimatedBytes > MAX_BASE64_BYTES) {
+        reject(
+          new Error("Image is still too large for AI processing after compression. Try a smaller photo.")
+        );
+        return;
+      }
+
+      resolve(reader.result);
+    };
     reader.onerror = () => reject(new Error("Could not read image file."));
     reader.readAsDataURL(file);
   });
