@@ -6,6 +6,8 @@ const TEXT_MODEL = "llama-3.1-8b-instant";
 const VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
 const ALLOWED_MODES = new Set(["multiple-choice", "flashcard", "short-answer", "true-false", "mix"]);
 const ALLOWED_DIFFICULTIES = new Set(["easy", "medium", "difficult"]);
+const MAX_TEXT_SOURCE_CHARS = 12000;
+const MAX_PDF_SOURCE_CHARS = 20000;
 
 const SYSTEM_PROMPT = `You are a university-level study assistant. Generate high-quality study questions targeting key concepts.
 
@@ -76,6 +78,27 @@ Source type: ${sourceLabel}
 
 Source text:
 ${text.trim()}`;
+}
+
+function compactWhitespace(text: string) {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function trimPdfText(text: string) {
+  const normalized = compactWhitespace(text);
+  if (normalized.length <= MAX_TEXT_SOURCE_CHARS) return normalized;
+
+  const headSize = 5000;
+  const middleSize = 2000;
+  const tailSize = 5000;
+  const middleStart = Math.max(headSize, Math.floor((normalized.length - middleSize) / 2));
+  const middleEnd = Math.min(normalized.length - tailSize, middleStart + middleSize);
+
+  return [
+    normalized.slice(0, headSize),
+    normalized.slice(middleStart, middleEnd),
+    normalized.slice(Math.max(middleEnd, normalized.length - tailSize)),
+  ].join("\n...\n");
 }
 
 function buildVisionPrompt(mode: string, difficulty: string, attachments: AttachmentPayload[]) {
@@ -373,9 +396,15 @@ async function generateQuestions({
   difficulty: string;
 }) {
   if (sourceKind === "text" || sourceKind === "pdf") {
-    const text = String((sourcePayload as { text?: string }).text ?? "").trim();
+    const rawText = String((sourcePayload as { text?: string }).text ?? "").trim();
+    const text = sourceKind === "pdf" ? trimPdfText(rawText) : rawText;
     if (text.length < 10) throw new Error("Text too short (min 10 characters)");
-    if (text.length > 12000) throw new Error("Text too long (max 12000 characters)");
+    if (sourceKind === "text" && text.length > MAX_TEXT_SOURCE_CHARS) {
+      throw new Error("Text too long (max 12000 characters)");
+    }
+    if (sourceKind === "pdf" && compactWhitespace(rawText).length > MAX_PDF_SOURCE_CHARS) {
+      throw new Error("PDF text is too long to process in one go. Keep it under about 20,000 characters.");
+    }
     const questions = normalizeQuestionSet(await callGroqJson({
       apiKey,
       model: TEXT_MODEL,
