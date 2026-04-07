@@ -263,12 +263,19 @@ export default function Home() {
   // ─── PDF Upload via Vercel Blob ──────────────────────────────
   const uploadPdfViaBlob = async (file: File): Promise<string> => {
     setUploadStatus("Uploading PDF...");
-    const formData = new FormData();
-    formData.append("file", file);
+    const safeName = sanitizeUploadName(file.name);
+    const blob = await upload(`study-buddy-pdfs/${Date.now()}-${safeName}`, file, {
+      access: "public",
+      contentType: "application/pdf",
+      handleUploadUrl: "/api/blob/upload",
+      clientPayload: JSON.stringify({ kind: "pdf" }),
+    });
 
-    const res = await fetch("/api/upload-pdf", {
+    setUploadStatus("Extracting PDF text...");
+    const res = await fetch("/api/upload-pdf/process", {
       method: "POST",
-      body: formData,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: blob.url }),
     });
 
     const data = await res.json().catch(() => ({}));
