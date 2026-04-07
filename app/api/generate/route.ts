@@ -7,7 +7,7 @@ const VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
 const ALLOWED_MODES = new Set(["multiple-choice", "flashcard", "short-answer", "true-false", "mix"]);
 const ALLOWED_DIFFICULTIES = new Set(["easy", "medium", "difficult"]);
 const MAX_TEXT_SOURCE_CHARS = 12000;
-const MAX_PDF_SOURCE_CHARS = 20000;
+const MAX_PDF_PROMPT_CHARS = 11000;
 
 const SYSTEM_PROMPT = `You are a university-level study assistant. Generate high-quality study questions targeting key concepts.
 
@@ -86,11 +86,11 @@ function compactWhitespace(text: string) {
 
 function trimPdfText(text: string) {
   const normalized = compactWhitespace(text);
-  if (normalized.length <= MAX_TEXT_SOURCE_CHARS) return normalized;
+  if (normalized.length <= MAX_PDF_PROMPT_CHARS) return normalized;
 
-  const headSize = 5000;
-  const middleSize = 2000;
-  const tailSize = 5000;
+  const headSize = 3500;
+  const middleSize = 4000;
+  const tailSize = 3500;
   const middleStart = Math.max(headSize, Math.floor((normalized.length - middleSize) / 2));
   const middleEnd = Math.min(normalized.length - tailSize, middleStart + middleSize);
 
@@ -401,9 +401,6 @@ async function generateQuestions({
     if (text.length < 10) throw new Error("Text too short (min 10 characters)");
     if (sourceKind === "text" && text.length > MAX_TEXT_SOURCE_CHARS) {
       throw new Error("Text too long (max 12000 characters)");
-    }
-    if (sourceKind === "pdf" && compactWhitespace(rawText).length > MAX_PDF_SOURCE_CHARS) {
-      throw new Error("PDF text is too long to process in one go. Keep it under about 20,000 characters.");
     }
     const questions = normalizeQuestionSet(await callGroqJson({
       apiKey,
