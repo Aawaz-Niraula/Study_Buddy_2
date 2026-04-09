@@ -2,12 +2,15 @@ import { createClient } from "@libsql/client";
 import { del } from "@vercel/blob";
 import { getAuthenticatedUserId } from "@/lib/supabase-api-auth";
 
-const TEXT_MODEL = "llama-3.1-8b-instant";
+const TEXT_MODEL = "llama3.1-8b";
 const VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
 const ALLOWED_MODES = new Set(["multiple-choice", "flashcard", "short-answer", "true-false", "mix"]);
 const ALLOWED_DIFFICULTIES = new Set(["easy", "medium", "difficult"]);
 const MAX_TEXT_SOURCE_CHARS = 12000;
-const MAX_PDF_PROMPT_CHARS = 11000;
+const APPROX_CHARS_PER_TOKEN = 4;
+const MAX_PDF_PROMPT_TOKENS = 4000;
+const MAX_PDF_PROMPT_CHARS = MAX_PDF_PROMPT_TOKENS * APPROX_CHARS_PER_TOKEN;
+const PDF_SAMPLE_SECTIONS = 4;
 
 const SYSTEM_PROMPT = `You are a university-level study assistant. Generate high-quality study questions targeting key concepts.
 
@@ -87,18 +90,17 @@ function compactWhitespace(text: string) {
 function trimPdfText(text: string) {
   const normalized = compactWhitespace(text);
   if (normalized.length <= MAX_PDF_PROMPT_CHARS) return normalized;
+  const sectionSize = Math.floor(MAX_PDF_PROMPT_CHARS / PDF_SAMPLE_SECTIONS);
+  const lastStart = Math.max(0, normalized.length - sectionSize);
+  const starts = Array.from({ length: PDF_SAMPLE_SECTIONS }, (_, index) => {
+    const ratio = index / (PDF_SAMPLE_SECTIONS - 1);
+    return Math.min(lastStart, Math.max(0, Math.floor(ratio * lastStart)));
+  });
 
-  const headSize = 3500;
-  const middleSize = 4000;
-  const tailSize = 3500;
-  const middleStart = Math.max(headSize, Math.floor((normalized.length - middleSize) / 2));
-  const middleEnd = Math.min(normalized.length - tailSize, middleStart + middleSize);
-
-  return [
-    normalized.slice(0, headSize),
-    normalized.slice(middleStart, middleEnd),
-    normalized.slice(Math.max(middleEnd, normalized.length - tailSize)),
-  ].join("\n...\n");
+  return starts
+    .map((start) => normalized.slice(start, start + sectionSize).trim())
+    .filter(Boolean)
+    .join("\n...\n");
 }
 
 function buildVisionPrompt(mode: string, difficulty: string, attachments: AttachmentPayload[]) {
@@ -365,8 +367,20 @@ async function saveTestSubmission({
 }
 
 // ─── AI calls ──────────────────────────────────────────────────
-async function callGroq({ apiKey, model, messages, maxTokens = 2048 }: { apiKey: string; model: string; messages: unknown[]; maxTokens?: number }) {
-  const upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+async function callOpenAiCompatibleChat({
+  apiKey,
+  baseUrl,
+  model,
+  messages,
+  maxTokens = 2048,
+}: {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  messages: unknown[];
+  maxTokens?: number;
+}) {
+  const upstream = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature: 0.6, top_p: 0.92 }),
@@ -379,7 +393,23 @@ async function callGroq({ apiKey, model, messages, maxTokens = 2048 }: { apiKey:
 }
 
 async function callGroqJson({ apiKey, model, messages, maxTokens = 2048 }: { apiKey: string; model: string; messages: unknown[]; maxTokens?: number }) {
-  return parseModelJson(await callGroq({ apiKey, model, messages, maxTokens }));
+  return parseModelJson(await callOpenAiCompatibleChat({
+    apiKey,
+    baseUrl: "https://api.groq.com/openai/v1",
+    model,
+    messages,
+    maxTokens,
+  }));
+}
+
+async function callCerebrasJson({ apiKey, model, messages, maxTokens = 2048 }: { apiKey: string; model: string; messages: unknown[]; maxTokens?: number }) {
+  return parseModelJson(await callOpenAiCompatibleChat({
+    apiKey,
+    baseUrl: "https://api.cerebras.ai/v1",
+    model,
+    messages,
+    maxTokens,
+  }));
 }
 
 async function generateQuestions({
@@ -402,7 +432,7 @@ async function generateQuestions({
     if (sourceKind === "text" && text.length > MAX_TEXT_SOURCE_CHARS) {
       throw new Error("Text too long (max 12000 characters)");
     }
-    const questions = normalizeQuestionSet(await callGroqJson({
+    const questions = normalizeQuestionSet(await callCerebrasJson({
       apiKey,
       model: TEXT_MODEL,
       messages: [
@@ -528,7 +558,7 @@ ${contextText}${previousContext}`;
         ],
         maxTokens: 2500,
       }))
-    : normalizeQuestionSet(await callGroqJson({
+    : normalizeQuestionSet(await callCerebrasJson({
         apiKey,
         model: TEXT_MODEL,
         messages: [
@@ -558,7 +588,7 @@ Return JSON only in this format:
 Questions:
 ${JSON.stringify(questions.map((q, i) => ({ index: i, question: q.question, expected_answer: q.answer, student_answer: answers[`sa-${i}`] ?? "" })))}`;
 
-  const result = await callGroqJson({
+  const result = await callCerebrasJson({
     apiKey,
     model: TEXT_MODEL,
     messages: [
@@ -616,8 +646,6 @@ export async function DELETE(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    if (!process.env.GROQ_API_KEY) return makeResponse(500, { detail: "GROQ_API_KEY not configured" });
-
     const userId = await getAuthenticatedUserId();
     if (!userId) return makeResponse(401, { detail: "Sign in to use Study Buddy." });
 
@@ -635,8 +663,14 @@ export async function POST(request: Request) {
       if (!sessionId) return makeResponse(422, { detail: "sessionId is required for tests." });
       const session = await getSessionById(sessionId, userId);
       if (!session) return makeResponse(404, { detail: "Session not found" });
+      if (session.source_kind === "image" && !process.env.GROQ_API_KEY) {
+        return makeResponse(500, { detail: "GROQ_API_KEY not configured" });
+      }
+      if (session.source_kind !== "image" && !process.env.CEREBRAS_API_KEY) {
+        return makeResponse(500, { detail: "CEREBRAS_API_KEY not configured" });
+      }
       const testQuestions = await generateTest({
-        apiKey: process.env.GROQ_API_KEY,
+        apiKey: session.source_kind === "image" ? process.env.GROQ_API_KEY! : process.env.CEREBRAS_API_KEY!,
         session,
         includePrevious: Boolean((body as { includePrevious?: boolean }).includePrevious),
         userId,
@@ -653,10 +687,11 @@ export async function POST(request: Request) {
     }
 
     if (action === "grade_short_answers") {
+      if (!process.env.CEREBRAS_API_KEY) return makeResponse(500, { detail: "CEREBRAS_API_KEY not configured" });
       const questions = Array.isArray((body as { questions?: Array<{ question?: string; answer?: string }> }).questions) ? (body as { questions: Array<{ question?: string; answer?: string }> }).questions : [];
       const answers = typeof (body as { answers?: Record<string, string> }).answers === "object" && (body as { answers?: Record<string, string> }).answers !== null ? (body as { answers: Record<string, string> }).answers : {};
       return makeResponse(200, await evaluateShortAnswers({
-        apiKey: process.env.GROQ_API_KEY,
+        apiKey: process.env.CEREBRAS_API_KEY,
         questions,
         answers,
       }));
@@ -697,8 +732,15 @@ export async function POST(request: Request) {
             };
     }
 
+    if (sourceKind === "image" && !process.env.GROQ_API_KEY) {
+      return makeResponse(500, { detail: "GROQ_API_KEY not configured" });
+    }
+    if (sourceKind !== "image" && !process.env.CEREBRAS_API_KEY) {
+      return makeResponse(500, { detail: "CEREBRAS_API_KEY not configured" });
+    }
+
     const { questions, modelUsed } = await generateQuestions({
-      apiKey: process.env.GROQ_API_KEY,
+      apiKey: sourceKind === "image" ? process.env.GROQ_API_KEY! : process.env.CEREBRAS_API_KEY!,
       sourceKind,
       sourcePayload,
       mode,
