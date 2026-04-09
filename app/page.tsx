@@ -1126,8 +1126,14 @@ export default function Home() {
       {/* Menu Bottom Sheet */}
       <BottomSheet isOpen={menuOpen} onClose={() => setMenuOpen(false)}>
         <div className="py-4">
-          <h3 className="text-xl font-bold text-[#f2efff] mb-4">Menu</h3>
-          <div className="space-y-2">
+          <div className="mb-5 rounded-2xl border border-white/10 bg-gradient-to-r from-[#a78bfa]/10 via-[#10101a] to-[#f9a8d4]/10 p-4 shadow-[0_16px_34px_rgba(8,8,14,0.28)]">
+            <h3 className="text-xl font-bold text-[#f2efff]">Quick Actions</h3>
+            <p className="mt-1 text-sm text-[#857ca2]">
+              Jump back into your session, review history, or start fresh.
+            </p>
+          </div>
+
+          <div className="space-y-3">
             {/* Take Test Option */}
             {hasResults && (
               <motion.button
@@ -1137,10 +1143,12 @@ export default function Home() {
                   setTestOptionsOpen(true);
                 }}
                 disabled={loading || uploading}
-                className="w-full text-left p-4 rounded-xl bg-gradient-to-r from-[#a78bfa]/20 to-[#f9a8d4]/20 border border-[#a78bfa]/30 hover:bg-[#a78bfa]/30 active:bg-[#a78bfa]/40 transition-colors text-[#f2efff] flex items-center gap-3 disabled:opacity-40"
+                className="w-full text-left p-4 rounded-2xl bg-gradient-to-r from-[#a78bfa]/20 to-[#f9a8d4]/20 border border-[#a78bfa]/30 hover:bg-[#a78bfa]/30 active:bg-[#a78bfa]/40 transition-all text-[#f2efff] flex items-center gap-3 disabled:opacity-40 shadow-[0_14px_26px_rgba(12,12,18,0.2)]"
               >
-                <BookOpen className="w-5 h-5 text-[#a78bfa]" />
-                <div>
+                <div className="rounded-xl bg-white/10 p-2">
+                  <BookOpen className="w-5 h-5 text-[#f2efff]" />
+                </div>
+                <div className="min-w-0">
                   <span className="font-medium">Take Test</span>
                   <p className="text-xs text-[#857ca2] mt-0.5">Start a timed quiz</p>
                 </div>
@@ -1154,10 +1162,12 @@ export default function Home() {
                 setMenuOpen(false);
                 handleSessionHistoryClick();
               }}
-              className="w-full text-left p-4 rounded-xl bg-white/5 hover:bg-white/8 active:bg-white/12 transition-colors text-[#ddd6fe] flex items-center gap-3"
+              className="w-full text-left p-4 rounded-2xl bg-white/5 hover:bg-white/8 active:bg-white/12 transition-all text-[#ddd6fe] flex items-center gap-3 border border-white/10 hover:border-white/15"
             >
-              <LayoutPanelLeft className="w-5 h-5 text-[#857ca2]" />
-              <div>
+              <div className="rounded-xl bg-white/5 p-2">
+                <LayoutPanelLeft className="w-5 h-5 text-[#857ca2]" />
+              </div>
+              <div className="min-w-0">
                 <span className="font-medium">Session Generations</span>
                 <p className="text-xs text-[#857ca2] mt-0.5">View question sets from this session</p>
               </div>
@@ -1170,10 +1180,12 @@ export default function Home() {
                 setMenuOpen(false);
                 handleTestHistoryClick();
               }}
-              className="w-full text-left p-4 rounded-xl bg-white/5 hover:bg-white/8 active:bg-white/12 transition-colors text-[#ddd6fe] flex items-center gap-3"
+              className="w-full text-left p-4 rounded-2xl bg-white/5 hover:bg-white/8 active:bg-white/12 transition-all text-[#ddd6fe] flex items-center gap-3 border border-white/10 hover:border-white/15"
             >
-              <Trophy className="w-5 h-5 text-[#857ca2]" />
-              <div>
+              <div className="rounded-xl bg-white/5 p-2">
+                <Trophy className="w-5 h-5 text-[#857ca2]" />
+              </div>
+              <div className="min-w-0">
                 <span className="font-medium">Test History</span>
                 <p className="text-xs text-[#857ca2] mt-0.5">Review past test scores</p>
               </div>
@@ -1186,10 +1198,12 @@ export default function Home() {
                 setMenuOpen(false);
                 resetSession();
               }}
-              className="w-full text-left p-4 rounded-xl bg-white/5 hover:bg-white/8 active:bg-white/12 transition-colors text-[#ddd6fe] flex items-center gap-3"
+              className="w-full text-left p-4 rounded-2xl bg-white/5 hover:bg-white/8 active:bg-white/12 transition-all text-[#ddd6fe] flex items-center gap-3 border border-white/10 hover:border-white/15"
             >
-              <X className="w-5 h-5 text-[#857ca2]" />
-              <div>
+              <div className="rounded-xl bg-white/5 p-2">
+                <X className="w-5 h-5 text-[#857ca2]" />
+              </div>
+              <div className="min-w-0">
                 <span className="font-medium">New Session</span>
                 <p className="text-xs text-[#857ca2] mt-0.5">Start fresh with new content</p>
               </div>

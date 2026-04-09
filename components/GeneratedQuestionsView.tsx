@@ -50,6 +50,25 @@ export function GeneratedQuestionsView({
   const getAnswerText = (data: Question) =>
     data.answer ?? data.expected_answer ?? data.expectedAnswer ?? data.back ?? "No answer provided";
 
+  const getNormalizedAnswer = (data: Question) =>
+    getAnswerText(data).trim().toUpperCase();
+
+  const isCorrectMcqOption = (option: string, idx: number, data: Question) => {
+    const normalizedAnswer = getNormalizedAnswer(data);
+    const letter = String.fromCharCode(65 + idx);
+    const normalizedOption = option.trim().toUpperCase();
+
+    if (normalizedAnswer === letter || normalizedAnswer === `${letter})`) return true;
+    if (normalizedAnswer === normalizedOption) return true;
+    if (normalizedOption.startsWith(`${letter})`)) {
+      return normalizedAnswer === letter || normalizedAnswer === `${letter})`;
+    }
+    return normalizedOption.includes(normalizedAnswer);
+  };
+
+  const isCorrectTrueFalseOption = (option: "True" | "False", data: Question) =>
+    getNormalizedAnswer(data) === option.toUpperCase();
+
   const allQuestions: Array<{ type: string; data: Question; key: string }> = [];
 
   if (questions.multiple_choice) {
@@ -79,7 +98,6 @@ export function GeneratedQuestionsView({
 
   return (
     <div className="mt-8 space-y-4">
-      {/* Header */}
       <div className="flex items-center justify-between px-2">
         <h3 className="text-lg font-bold text-[#f2efff]">
           Generated Questions ({allQuestions.length})
@@ -94,7 +112,6 @@ export function GeneratedQuestionsView({
         </div>
       </div>
 
-      {/* Questions */}
       <div className="space-y-3">
         {allQuestions.map(({ type, data, key }, index) => {
           const isRevealed = revealedAnswers.has(key);
@@ -107,7 +124,6 @@ export function GeneratedQuestionsView({
               transition={{ delay: index * 0.05 }}
               className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden"
             >
-              {/* Question Header */}
               <div className="p-5">
                 <div className="flex items-start gap-3 mb-3">
                   <span className="px-2 py-1 bg-[#a78bfa]/10 border border-[#a78bfa]/20 rounded text-xs text-[#a78bfa] font-medium">
@@ -116,26 +132,64 @@ export function GeneratedQuestionsView({
                   <span className="text-xs text-[#857ca2]">{type}</span>
                 </div>
 
-                {/* Question Text */}
                 <p className="text-[#f2efff] leading-relaxed mb-4">
                   {data.question || data.statement || data.front}
                 </p>
 
-                {/* Options (for MCQ) */}
                 {type === "Multiple Choice" && data.options && (
                   <div className="space-y-2 mb-4">
-                    {data.options.map((option, idx) => (
-                      <div
-                        key={idx}
-                        className="px-4 py-2 bg-white/5 rounded-lg text-sm text-[#ddd6fe]"
-                      >
-                        {option}
-                      </div>
-                    ))}
+                    {data.options.map((option, idx) => {
+                      const isCorrect = isRevealed && isCorrectMcqOption(option, idx, data);
+                      return (
+                        <div
+                          key={idx}
+                          className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                            isCorrect
+                              ? "bg-[#22c55e]/12 border border-[#22c55e]/30 text-[#f2efff]"
+                              : "bg-white/5 text-[#ddd6fe]"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <span>{option}</span>
+                            {isCorrect && (
+                              <span className="text-[11px] font-semibold uppercase tracking-wide text-[#22c55e]">
+                                Correct
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
-                {/* Reveal Button */}
+                {type === "True/False" && (
+                  <div className="grid grid-cols-2 gap-2 mb-4">
+                    {(["True", "False"] as const).map((option) => {
+                      const isCorrect = isRevealed && isCorrectTrueFalseOption(option, data);
+                      return (
+                        <div
+                          key={option}
+                          className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                            isCorrect
+                              ? "bg-[#22c55e]/12 border border-[#22c55e]/30 text-[#f2efff]"
+                              : "bg-white/5 text-[#ddd6fe]"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <span>{option}</span>
+                            {isCorrect && (
+                              <span className="text-[11px] font-semibold uppercase tracking-wide text-[#22c55e]">
+                                Correct
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
                 <motion.button
                   whileTap={{ opacity: 0.6 }}
                   onClick={() => toggleAnswer(key)}
@@ -156,8 +210,7 @@ export function GeneratedQuestionsView({
                 </motion.button>
               </div>
 
-              {/* Answer (revealed) */}
-              {isRevealed && (
+              {isRevealed && (type === "Short Answer" || type === "Flashcard") && (
                 <motion.div
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: "auto", opacity: 1 }}

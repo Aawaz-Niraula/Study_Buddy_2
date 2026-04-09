@@ -41,6 +41,13 @@ interface SessionHistoryListProps {
   deletingSessionId?: string | null;
 }
 
+const clampTitleStyle = {
+  display: "-webkit-box",
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: "vertical" as const,
+  overflow: "hidden",
+};
+
 export function SessionHistoryList({
   sessions,
   currentSessionId,
@@ -95,8 +102,11 @@ export function SessionHistoryList({
             <p className="text-xs uppercase tracking-wide text-[#857ca2]">Current Session</p>
           </div>
 
-          <div className="rounded-xl border border-[#a78bfa]/20 bg-gradient-to-r from-[#a78bfa]/10 to-[#f9a8d4]/10 p-3">
-            <p className="mb-1 truncate text-sm font-medium text-[#f2efff]">
+          <div className="rounded-2xl border border-[#a78bfa]/20 bg-gradient-to-r from-[#a78bfa]/10 via-[#10101a] to-[#f9a8d4]/10 p-4 shadow-[0_14px_30px_rgba(9,9,16,0.28)]">
+            <p
+              className="mb-1 text-sm font-semibold leading-snug text-[#f2efff] break-words"
+              style={clampTitleStyle}
+            >
               {currentSessionTitle || "New Session"}
             </p>
             <p className="text-xs text-[#857ca2]">
@@ -116,22 +126,22 @@ export function SessionHistoryList({
                 return (
                   <motion.button
                     key={gen.id}
-                    whileTap={{ scale: 0.98 }}
+                    whileTap={{ scale: 0.985 }}
                     onClick={() => onSelectGeneration(gen.id)}
-                    className={`w-full rounded-lg p-3 text-left transition-all ${
+                    className={`w-full rounded-xl p-3.5 text-left transition-all ${
                       isActive
-                        ? "border border-[#a78bfa]/50 bg-[#a78bfa]/20"
-                        : "border border-transparent bg-white/5 hover:bg-white/8"
+                        ? "border border-[#a78bfa]/45 bg-gradient-to-r from-[#a78bfa]/18 to-[#f9a8d4]/10 shadow-[0_12px_26px_rgba(11,11,18,0.22)]"
+                        : "border border-white/8 bg-white/5 hover:border-white/15 hover:bg-white/8"
                     }`}
                   >
                     <div className="flex items-center gap-2">
                       <Sparkles className={`h-4 w-4 ${isActive ? "text-[#a78bfa]" : "text-[#857ca2]"}`} />
-                      <span className={`text-sm ${isActive ? "text-[#a78bfa]" : "text-[#f2efff]"}`}>
+                      <span className={`text-sm font-medium ${isActive ? "text-[#ddd6fe]" : "text-[#f2efff]"}`}>
                         Gen #{currentGenerations.length - index}
                       </span>
                       <span className="ml-auto text-xs text-[#857ca2]">{timeStr}</span>
                     </div>
-                    <div className="mt-1 ml-6 flex items-center gap-2">
+                    <div className="mt-1 ml-6 flex items-center gap-2 flex-wrap">
                       <span className="text-xs text-[#a78bfa]">{gen.difficulty}</span>
                       <span className="text-xs text-[#857ca2]">• {gen.questionCount} Q</span>
                     </div>
@@ -163,19 +173,22 @@ export function SessionHistoryList({
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: idx * 0.03 }}
-                    whileTap={{ opacity: 0.6, scale: 0.98 }}
+                    whileTap={{ opacity: 0.7, scale: 0.985 }}
                     onClick={() => onSelectSession(session.id)}
-                    className="flex-1 rounded-xl border border-white/10 bg-white/5 p-3 text-left transition-all hover:border-white/20 hover:bg-white/8"
+                    className="flex-1 rounded-2xl border border-white/10 bg-gradient-to-r from-white/[0.06] to-white/[0.03] p-3.5 text-left transition-all hover:border-white/20 hover:bg-white/8 hover:shadow-[0_14px_28px_rgba(9,9,16,0.22)]"
                   >
                     <div className="flex items-start gap-3">
-                      <div className="rounded-lg bg-[#a78bfa]/10 p-2">
+                      <div className="shrink-0 rounded-xl bg-[#a78bfa]/10 p-2.5">
                         <Icon className="h-4 w-4 text-[#a78bfa]" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h3 className="truncate text-sm font-medium text-[#f2efff]">
+                        <h3
+                          className="text-sm font-medium leading-snug text-[#f2efff] break-words"
+                          style={clampTitleStyle}
+                        >
                           {session.title || "Untitled"}
                         </h3>
-                        <div className="flex items-center gap-2 text-xs text-[#857ca2]">
+                        <div className="mt-1 flex items-center gap-2 flex-wrap text-xs text-[#857ca2]">
                           <span>{date}</span>
                           {session.questionCount !== undefined && (
                             <>
@@ -193,7 +206,7 @@ export function SessionHistoryList({
                       type="button"
                       onClick={() => onDeleteSession(session.id)}
                       disabled={actionLoading || deletingSessionId === session.id}
-                      className="flex w-11 items-center justify-center rounded-xl border border-red-500/20 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="flex w-11 items-center justify-center rounded-2xl border border-red-500/20 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-60"
                       aria-label={`Delete ${session.title || "session"}`}
                     >
                       {deletingSessionId === session.id ? (
