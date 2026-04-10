@@ -108,7 +108,7 @@ export function SessionForm({
             placeholder="Paste your notes here…"
             disabled={isDisabled}
             rows={5}
-            className="w-full bg-[#0d0d18] border border-white/[0.07] rounded-xl px-4 py-3 text-[#f2efff] text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#a78bfa]/40 focus:border-[#a78bfa]/30 placeholder-[#5a5270] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="w-full bg-[#0d0d18]/60 border border-white/[0.07] rounded-xl px-4 py-3 text-[#f2efff] text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#f9a8d4]/40 focus:border-[#a78bfa]/50 placeholder-[#5a5270] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 glass-panel"
             style={{ fontFamily: "inherit" }}
           />
 
@@ -206,9 +206,9 @@ export function SessionForm({
         >
           <div className="flex items-center gap-2.5">
             <span
-              className={`w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 transition-all ${
+              className={`w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 transition-all duration-300 ${
                 hasInput
-                  ? "bg-gradient-to-br from-[#a78bfa] to-[#f9a8d4]"
+                  ? "bg-gradient-to-br from-[#a78bfa] to-[#f9a8d4] shadow-[0_0_12px_rgba(249,168,212,0.4)]"
                   : "bg-white/10"
               }`}
             >
@@ -336,9 +336,9 @@ export function SessionForm({
         whileTap={{ scale: hasInput && !isDisabled ? 0.98 : 1 }}
         onClick={onGenerate}
         disabled={!hasInput || isDisabled}
-        className={`w-full h-14 rounded-2xl font-bold text-sm tracking-widest uppercase transition-all flex items-center justify-center gap-2.5 ${
+        className={`w-full h-14 rounded-2xl font-bold text-sm tracking-widest uppercase transition-all duration-300 flex items-center justify-center gap-2.5 ${
           hasInput && !isDisabled
-            ? "bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] text-white shadow-[0_8px_24px_rgba(167,139,250,0.3)] hover:shadow-[0_12px_32px_rgba(167,139,250,0.4)] active:shadow-[0_4px_12px_rgba(167,139,250,0.2)]"
+            ? "bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] text-white shadow-[0_8px_24px_rgba(167,139,250,0.4)] hover:shadow-[0_12px_32px_rgba(167,139,250,0.6)] hover:-translate-y-0.5 active:translate-y-0 active:shadow-[0_4px_12px_rgba(167,139,250,0.3)] animate-shimmer"
             : "bg-white/[0.04] text-[#857ca2] cursor-not-allowed border border-white/10"
         }`}
       >

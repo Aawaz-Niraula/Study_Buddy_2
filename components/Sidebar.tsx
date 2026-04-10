@@ -33,9 +33,9 @@ export function Sidebar({ isOpen, onClose, side, children, title }: SidebarProps
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.3 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40"
+            className="fixed inset-0 bg-gradient-to-r from-black/80 to-[#0b0b12]/80 backdrop-blur-md z-40"
           />
 
           {/* Sidebar */}

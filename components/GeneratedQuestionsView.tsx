@@ -110,10 +110,11 @@ export function GeneratedQuestionsView({
           return (
             <motion.article
               key={key}
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.04, duration: 0.3 }}
-              className="bg-white/[0.04] border border-white/10 rounded-2xl overflow-hidden"
+              transition={{ delay: index * 0.05, duration: 0.4, type: "spring", stiffness: 300, damping: 25 }}
+              whileHover={{ y: -4, transition: { duration: 0.2 } }}
+              className="bg-white/[0.04] border border-white/10 rounded-2xl overflow-hidden shadow-lg hover:shadow-[0_8px_24px_rgba(167,139,250,0.15)] transition-shadow duration-300 glass-panel"
             >
               <div className="p-4 sm:p-5">
                 {/* Badge row */}

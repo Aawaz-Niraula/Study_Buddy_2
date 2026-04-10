@@ -902,9 +902,14 @@ export default function Home() {
       <GreetingBanner />
 
       {/* Main Content */}
-      <div className="pt-16 sm:pt-20 px-3 sm:px-4 pb-20 sm:pb-24 max-w-3xl mx-auto">
+      <div className="pt-16 sm:pt-20 px-3 sm:px-4 pb-20 sm:pb-24 max-w-3xl mx-auto flex flex-col gap-8">
         {!testMode && !showResults && (
-          <>
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+            className="flex flex-col gap-8"
+          >
             {/* Hero Section */}
             <div className="mb-8">
               {/* Top Row: Made by aawaz (left) + NEW SESSION (right) */}
@@ -1053,14 +1058,20 @@ export default function Home() {
             />
 
             {/* Generated Questions */}
-            {hasResults && questions && (
-              <GeneratedQuestionsView
-                questions={questions}
-                difficulty={difficulty}
-                mode={mode}
-              />
+            {hasResults && questions && mode && difficulty && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+              >
+                <GeneratedQuestionsView
+                  questions={questions}
+                  difficulty={difficulty}
+                  mode={mode}
+                />
+              </motion.div>
             )}
-          </>
+          </motion.div>
         )}
       </div>
 

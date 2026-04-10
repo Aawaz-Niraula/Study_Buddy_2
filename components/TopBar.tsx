@@ -50,7 +50,7 @@ export function TopBar({ onTestHistoryClick, onSessionHistoryClick, onMenuClick 
       className="fixed top-0 left-0 right-0 z-30"
     >
       {/* Blur + gradient backdrop */}
-      <div className="absolute inset-0 bg-[#06060b]/80 backdrop-blur-md border-b border-white/[0.04]" />
+      <div className="absolute inset-0 bg-[#06060b]/70 backdrop-blur-xl border-b border-white/[0.04] shadow-[0_4px_30px_rgba(0,0,0,0.1)]" />
 
       <div className="relative max-w-5xl mx-auto flex items-center justify-between h-14 px-3 sm:px-5">
         {/* App Name */}
@@ -92,11 +92,11 @@ export function TopBar({ onTestHistoryClick, onSessionHistoryClick, onMenuClick 
                 <AnimatePresence>
                   {menuOpen && (
                     <motion.div
-                      initial={{ opacity: 0, y: -6, scale: 0.96 }}
+                      initial={{ opacity: 0, y: -8, scale: 0.94 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -6, scale: 0.96 }}
-                      transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                      className="absolute right-0 mt-2 w-72 bg-[#0d0d16]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl shadow-black/60 overflow-hidden"
+                      exit={{ opacity: 0, y: -8, scale: 0.94 }}
+                      transition={{ type: "spring", stiffness: 450, damping: 25 }}
+                      className="absolute right-0 mt-2 w-72 bg-[#0d0d16]/90 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-2xl shadow-black/80 overflow-hidden"
                     >
                       {/* User Info */}
                       <div className="p-4 bg-gradient-to-r from-[#a78bfa]/8 to-[#f9a8d4]/8 border-b border-white/[0.06]">
