@@ -41,13 +41,6 @@ interface SessionHistoryListProps {
   deletingSessionId?: string | null;
 }
 
-const clampTitleStyle = {
-  display: "-webkit-box",
-  WebkitLineClamp: 2,
-  WebkitBoxOrient: "vertical" as const,
-  overflow: "hidden",
-};
-
 export function SessionHistoryList({
   sessions,
   currentSessionId,
@@ -95,18 +88,17 @@ export function SessionHistoryList({
 
   return (
     <div className="space-y-6">
+      {/* Current Session */}
       {hasCurrentSession && (
         <div className="space-y-3">
-          <div className="flex items-center gap-2 px-2">
-            <div className="h-2 w-2 animate-pulse rounded-full bg-green-400" />
+          <div className="flex items-center gap-2 px-1">
+            <div className="h-2 w-2 animate-pulse rounded-full bg-green-400 shrink-0" />
             <p className="text-xs uppercase tracking-wide text-[#857ca2]">Current Session</p>
           </div>
 
           <div className="rounded-2xl border border-[#a78bfa]/20 bg-gradient-to-r from-[#a78bfa]/10 via-[#10101a] to-[#f9a8d4]/10 p-4 shadow-[0_14px_30px_rgba(9,9,16,0.28)]">
-            <p
-              className="mb-1 text-sm font-semibold leading-snug text-[#f2efff] break-words"
-              style={clampTitleStyle}
-            >
+            {/* Title: fixed 2-line height, ellipsis on overflow */}
+            <p className="text-sm font-semibold text-[#f2efff] leading-snug line-clamp-2 break-all mb-1">
               {currentSessionTitle || "New Session"}
             </p>
             <p className="text-xs text-[#857ca2]">
@@ -134,16 +126,16 @@ export function SessionHistoryList({
                         : "border border-white/8 bg-white/5 hover:border-white/15 hover:bg-white/8"
                     }`}
                   >
-                    <div className="flex items-center gap-2">
-                      <Sparkles className={`h-4 w-4 ${isActive ? "text-[#a78bfa]" : "text-[#857ca2]"}`} />
-                      <span className={`text-sm font-medium ${isActive ? "text-[#ddd6fe]" : "text-[#f2efff]"}`}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Sparkles className={`h-4 w-4 shrink-0 ${isActive ? "text-[#a78bfa]" : "text-[#857ca2]"}`} />
+                      <span className={`text-sm font-medium truncate ${isActive ? "text-[#ddd6fe]" : "text-[#f2efff]"}`}>
                         Gen #{currentGenerations.length - index}
                       </span>
-                      <span className="ml-auto text-xs text-[#857ca2]">{timeStr}</span>
+                      <span className="ml-auto text-xs text-[#857ca2] shrink-0 pl-1">{timeStr}</span>
                     </div>
                     <div className="mt-1 ml-6 flex items-center gap-2 flex-wrap">
                       <span className="text-xs text-[#a78bfa]">{gen.difficulty}</span>
-                      <span className="text-xs text-[#857ca2]">• {gen.questionCount} Q</span>
+                      <span className="text-xs text-[#857ca2]">· {gen.questionCount} Q</span>
                     </div>
                   </motion.button>
                 );
@@ -153,9 +145,10 @@ export function SessionHistoryList({
         </div>
       )}
 
+      {/* Previous Sessions */}
       {previousSessions.length > 0 && (
         <div className="space-y-3">
-          <p className="px-2 text-xs uppercase tracking-wide text-[#857ca2]">
+          <p className="px-1 text-xs uppercase tracking-wide text-[#857ca2]">
             Previous Sessions ({previousSessions.length})
           </p>
 
@@ -166,34 +159,37 @@ export function SessionHistoryList({
                 month: "short",
                 day: "numeric",
               });
+              const isDeleting = deletingSessionId === session.id;
 
               return (
-                <div key={session.id} className="flex items-stretch gap-2">
+                /* Outer wrapper: fixed height row so all cards are uniform */
+                <div key={session.id} className="flex items-stretch gap-2 h-[72px]">
                   <motion.button
-                    initial={{ opacity: 0, y: 10 }}
+                    initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: idx * 0.03 }}
                     whileTap={{ opacity: 0.7, scale: 0.985 }}
                     onClick={() => onSelectSession(session.id)}
-                    className="flex-1 rounded-2xl border border-white/10 bg-gradient-to-r from-white/[0.06] to-white/[0.03] p-3.5 text-left transition-all hover:border-white/20 hover:bg-white/8 hover:shadow-[0_14px_28px_rgba(9,9,16,0.22)]"
+                    /* flex-1 so the delete button always gets exactly 44px */
+                    className="flex-1 min-w-0 rounded-2xl border border-white/10 bg-gradient-to-r from-white/[0.06] to-white/[0.03] px-3 py-0 text-left transition-all hover:border-white/20 hover:bg-white/8 hover:shadow-[0_14px_28px_rgba(9,9,16,0.22)] flex items-center"
                   >
-                    <div className="flex items-start gap-3">
-                      <div className="shrink-0 rounded-xl bg-[#a78bfa]/10 p-2.5">
+                    <div className="flex items-center gap-3 min-w-0 w-full">
+                      {/* Icon badge — fixed size, never shrinks */}
+                      <div className="shrink-0 rounded-xl bg-[#a78bfa]/10 p-2">
                         <Icon className="h-4 w-4 text-[#a78bfa]" />
                       </div>
+
+                      {/* Text block: takes all remaining space, clips overflow */}
                       <div className="min-w-0 flex-1">
-                        <h3
-                          className="text-sm font-medium leading-snug text-[#f2efff] break-words"
-                          style={clampTitleStyle}
-                        >
+                        <p className="text-sm font-medium text-[#f2efff] truncate leading-snug">
                           {session.title || "Untitled"}
-                        </h3>
-                        <div className="mt-1 flex items-center gap-2 flex-wrap text-xs text-[#857ca2]">
-                          <span>{date}</span>
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-0.5 text-xs text-[#857ca2]">
+                          <span className="shrink-0">{date}</span>
                           {session.questionCount !== undefined && (
                             <>
-                              <span>•</span>
-                              <span>{session.questionCount} Q</span>
+                              <span className="shrink-0">·</span>
+                              <span className="shrink-0">{session.questionCount} Q</span>
                             </>
                           )}
                         </div>
@@ -201,15 +197,16 @@ export function SessionHistoryList({
                     </div>
                   </motion.button>
 
+                  {/* Delete button — fixed width, always visible */}
                   {onDeleteSession && (
                     <button
                       type="button"
                       onClick={() => onDeleteSession(session.id)}
-                      disabled={actionLoading || deletingSessionId === session.id}
-                      className="flex w-11 items-center justify-center rounded-2xl border border-red-500/20 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={actionLoading || isDeleting}
+                      className="shrink-0 w-11 flex items-center justify-center rounded-2xl border border-red-500/20 bg-red-500/10 text-red-400 transition-colors hover:bg-red-500/20 active:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-50"
                       aria-label={`Delete ${session.title || "session"}`}
                     >
-                      {deletingSessionId === session.id ? (
+                      {isDeleting ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
                         <Trash2 className="h-4 w-4" />
