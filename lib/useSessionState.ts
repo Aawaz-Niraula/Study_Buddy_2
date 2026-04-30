@@ -13,10 +13,10 @@ export type Attachment = {
   origin: "upload" | "camera";
 };
 export type QuestionSet = {
-  multiple_choice?: any[];
-  short_answer?: any[];
-  true_false?: any[];
-  flashcards?: any[];
+  multiple_choice?: unknown[];
+  short_answer?: unknown[];
+  true_false?: unknown[];
+  flashcards?: unknown[];
 };
 export type Generation = {
   id: string;

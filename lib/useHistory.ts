@@ -70,7 +70,10 @@ export function useHistory() {
 
   useEffect(() => {
     if (!authLoading) {
-      loadHistory();
+      const timer = window.setTimeout(() => {
+        void loadHistory();
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
   }, [authLoading, loadHistory]);
 

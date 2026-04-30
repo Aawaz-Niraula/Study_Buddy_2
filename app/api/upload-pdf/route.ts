@@ -5,6 +5,16 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const MAX_PDF_BYTES = 15 * 1024 * 1024;
+type PdfParseResult = {
+  text: string;
+  numpages: number;
+};
+
+function isPdfParseResult(value: unknown): value is PdfParseResult {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as { text?: unknown; numpages?: unknown };
+  return typeof candidate.text === "string" && typeof candidate.numpages === "number";
+}
 
 export async function POST(request: Request) {
   const userId = await getAuthenticatedUserId();
@@ -33,6 +43,9 @@ export async function POST(request: Request) {
     const pdfParse = (await import("pdf-parse")).default;
     const buffer = Buffer.from(await file.arrayBuffer());
     const pdfData = await pdfParse(buffer);
+    if (!isPdfParseResult(pdfData)) {
+      throw new Error("Could not parse PDF text.");
+    }
 
     return NextResponse.json({
       success: true,

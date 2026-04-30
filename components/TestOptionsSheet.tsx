@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Check, FileStack, History, Clock } from "lucide-react";
+import { Check, FileStack, History, Clock, type LucideIcon } from "lucide-react";
 
 interface TestOption {
   id: string;
   title: string;
   description: string;
-  icon: any;
+  icon: LucideIcon;
 }
 
 interface TestOptionsSheetProps {

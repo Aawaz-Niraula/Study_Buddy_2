@@ -9,7 +9,7 @@ interface Question {
   question?: string;
   statement?: string;
   options?: string[];
-  answer?: string;
+  answer?: string | boolean;
 }
 
 interface TestScreenProps {

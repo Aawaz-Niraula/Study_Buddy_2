@@ -7,7 +7,7 @@ import { useState } from "react";
 interface Question {
   question?: string;
   statement?: string;
-  answer?: string;
+  answer?: string | boolean;
   expected_answer?: string;
   expectedAnswer?: string;
   options?: string[];
@@ -38,13 +38,17 @@ export function GeneratedQuestionsView({
   const toggleAnswer = (key: string) => {
     setRevealedAnswers((prev) => {
       const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
       return next;
     });
   };
 
   const getAnswerText = (data: Question) =>
-    data.answer ?? data.expected_answer ?? data.expectedAnswer ?? data.back ?? "No answer provided";
+    String(data.answer ?? data.expected_answer ?? data.expectedAnswer ?? data.back ?? "No answer provided");
 
   const getNormalizedAnswer = (data: Question) =>
     getAnswerText(data).trim().toUpperCase();

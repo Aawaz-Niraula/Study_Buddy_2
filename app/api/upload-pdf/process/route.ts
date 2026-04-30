@@ -6,6 +6,16 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const MAX_PDF_BYTES = 15 * 1024 * 1024;
+type PdfParseResult = {
+  text: string;
+  numpages: number;
+};
+
+function isPdfParseResult(value: unknown): value is PdfParseResult {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as { text?: unknown; numpages?: unknown };
+  return typeof candidate.text === "string" && typeof candidate.numpages === "number";
+}
 
 function isTrustedBlobUrl(url: string): boolean {
   try {
@@ -60,6 +70,9 @@ export async function POST(request: Request) {
     const pdfParse = (await import("pdf-parse")).default;
     const buffer = Buffer.from(arrayBuffer);
     const pdfData = await pdfParse(buffer);
+    if (!isPdfParseResult(pdfData)) {
+      throw new Error("Could not parse PDF text.");
+    }
     const extractedText = pdfData.text;
 
     return NextResponse.json({

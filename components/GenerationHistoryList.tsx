@@ -132,7 +132,7 @@ export function GenerationHistoryList({
                       {gen.difficulty.toUpperCase()}
                     </span>
                     <span className="px-2 py-1 bg-white/5 border border-white/10 rounded text-xs text-[#857ca2]">
-                      {gen.questionCount} Q's
+                      {gen.questionCount} Qs
                     </span>
                     <span className="text-xs text-[#857ca2] truncate">
                       {gen.mode === "mix"

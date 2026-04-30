@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo, useState, useCallback, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { TopBar } from "@/components/TopBar";
-import GreetingBanner from "@/components/GreetingBanner";
 import { Sidebar } from "@/components/Sidebar";
 import { BottomSheet } from "@/components/BottomSheet";
 import { SessionForm } from "@/components/SessionForm";
@@ -14,7 +13,7 @@ import { ResultsScreen } from "@/components/ResultsScreen";
 import { TestReviewScreen } from "@/components/TestReviewScreen";
 import { GeneratedQuestionsView } from "@/components/GeneratedQuestionsView";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
-import { Sparkles, CircleHelp, X, BookOpen, LayoutPanelLeft, Trophy, Loader2 } from "lucide-react";
+import { Sparkles, CircleHelp, X, BookOpen, LayoutPanelLeft, Trophy, Loader2, House, FolderOpen, Clock3, Menu, Plus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { upload } from "@vercel/blob/client";
 import { useAuth } from "@/lib/useAuth";
@@ -55,10 +54,20 @@ type Attachment = {
   origin: "upload" | "camera";
 };
 type QuestionSet = {
-  multiple_choice?: any[];
-  short_answer?: any[];
-  true_false?: any[];
-  flashcards?: any[];
+  multiple_choice?: QuestionItem[];
+  short_answer?: QuestionItem[];
+  true_false?: QuestionItem[];
+  flashcards?: QuestionItem[];
+};
+type QuestionItem = {
+  question?: string;
+  statement?: string;
+  answer?: string | boolean;
+  expected_answer?: string;
+  expectedAnswer?: string;
+  options?: string[];
+  front?: string;
+  back?: string;
 };
 type Generation = {
   id: string;
@@ -92,6 +101,16 @@ type TestSubmission = {
   sessionId?: string;
   sessionTitle?: string;
 };
+type ReviewQuestion = {
+  question?: string;
+  statement?: string;
+  answer: string;
+  userAnswer: string;
+  correct?: boolean;
+  explanation?: string;
+};
+const getErrorMessage = (err: unknown, fallback: string) =>
+  err instanceof Error && err.message ? err.message : fallback;
 
 export default function Home() {
   const { user, loading: authLoading } = useAuth();
@@ -113,7 +132,7 @@ export default function Home() {
   const [testMode, setTestMode] = useState(false);
   const [testQuestions, setTestQuestions] = useState<QuestionSet | null>(null);
   const [testAnswers, setTestAnswers] = useState<TestAnswers>({});
-  const [testSubmitted, setTestSubmitted] = useState(false);
+  const [, setTestSubmitted] = useState(false);
   const [testScore, setTestScore] = useState<{ score: number; total: number } | null>(null);
   const [testSubmissions, setTestSubmissions] = useState<TestSubmission[]>([]);
   const [allTestSubmissions, setAllTestSubmissions] = useState<TestSubmission[]>([]);
@@ -392,8 +411,8 @@ export default function Home() {
       setSessionTitle(parsed[0]?.name || "File session");
       setUploadStatus(`Added ${parsed.length} file${parsed.length === 1 ? "" : "s"}.`);
       toast.success(`${parsed.length} file${parsed.length === 1 ? "" : "s"} added successfully.`);
-    } catch (err: any) {
-      const msg = err.message || "Could not read the selected file.";
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, "Could not read the selected file.");
       setError(msg);
       toast.error(msg);
     } finally {
@@ -472,8 +491,8 @@ export default function Home() {
 
       toast.success("Questions generated successfully!");
       if (sessionHistoryOpen) await loadHistory();
-    } catch (err: any) {
-      const msg = err.message || "Could not generate questions.";
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, "Could not generate questions.");
       setError(msg);
       toast.error(msg);
     } finally {
@@ -512,12 +531,14 @@ export default function Home() {
       setQuestions(session.latest_generation?.questions ?? null);
       setActiveGenerationId(session.latest_generation?.id ?? null);
       
-      const sessionTests = Array.isArray(session.test_submissions) ? session.test_submissions : [];
-      setTestSubmissions(sessionTests.map((t: any) => ({
-        ...t,
+      const sessionTests: unknown[] = Array.isArray(session.test_submissions)
+        ? session.test_submissions
+        : [];
+      setTestSubmissions(sessionTests.map((t: unknown) => ({
+        ...(t as Record<string, unknown>),
         sessionId: session.id,
         sessionTitle: session.title,
-      })));
+      })) as TestSubmission[]);
       
       setUploadStatus("");
       setSessionHistoryOpen(false);
@@ -529,8 +550,8 @@ export default function Home() {
       setTestScore(null);
       setShowResults(false);
       toast.success("Session loaded.");
-    } catch (err: any) {
-      const msg = err.message || "Could not open session.";
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, "Could not open session.");
       setError(msg);
       toast.error(msg);
     } finally {
@@ -593,8 +614,8 @@ export default function Home() {
       setTimerMinutes(timer);
       setTestMode(true);
       toast.success("Test generated! Good luck!");
-    } catch (err: any) {
-      const msg = err.message || "Could not generate test.";
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, "Could not generate test.");
       setError(msg);
       toast.error(msg);
     } finally {
@@ -712,7 +733,7 @@ export default function Home() {
   // Get all questions flattened for test-taking
   const getFlattenedTestQuestions = () => {
     if (!testQuestions) return [];
-    const all: any[] = [];
+    const all: Array<QuestionItem & { type: "mcq" | "tf" | "sa"; key: string; index: number }> = [];
 
     if (testQuestions.multiple_choice) {
       testQuestions.multiple_choice.forEach((q, i) =>
@@ -742,7 +763,7 @@ export default function Home() {
     shortAnswerEvaluations?: ShortAnswerEvaluation[]
   ) => {
     if (!questionSet) return [];
-    const results: any[] = [];
+    const results: ReviewQuestion[] = [];
 
     if (questionSet.multiple_choice) {
       questionSet.multiple_choice.forEach((q, i) => {
@@ -754,7 +775,7 @@ export default function Home() {
             .match(/[A-D]/)?.[0];
         results.push({
           question: q.question,
-          answer: q.answer,
+          answer: String(q.answer ?? ""),
           userAnswer: userAnswer || "No answer",
           correct,
         });
@@ -781,7 +802,7 @@ export default function Home() {
         const evaluation = shortAnswerEvaluations?.find((e) => e.index === i);
         results.push({
           question: q.question,
-          answer: q.answer,
+          answer: String(q.answer ?? ""),
           userAnswer: userAnswer || "No answer",
           correct: evaluation?.correct,
           explanation: evaluation?.feedback,
@@ -807,6 +828,26 @@ export default function Home() {
 
   const handleMenuClick = () => {
     setMenuOpen(!menuOpen);
+  };
+
+  const handleHomeClick = () => {
+    setSessionHistoryOpen(false);
+    setTestHistoryOpen(false);
+    setMenuOpen(false);
+    setHelpOpen(false);
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const handleNewSession = () => {
+    const hasContent = text.trim() || attachments.length > 0 || generations.length > 0;
+    if (!hasContent && !sessionId) {
+      toast("Please use your current session first", { icon: "📝" });
+      return;
+    }
+    resetSession();
+    toast.success("New session started.");
   };
 
   // ─── Loading state while auth initializes ────────────────────
@@ -891,98 +932,108 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#06060b] via-[#0b0b12] to-[#11111a] text-[#f2efff] relative">
-      {/* Top Bar */}
-      <TopBar 
-        onTestHistoryClick={handleTestHistoryClick} 
-        onSessionHistoryClick={handleSessionHistoryClick}
-        onMenuClick={handleMenuClick} 
-      />
+      <TopBar desktopOffsetClassName="left-0 min-[769px]:left-[260px]" />
 
-      {/* Greeting Banner (shows once per session) */}
-      <GreetingBanner />
+      <aside className="hidden min-[769px]:fixed min-[769px]:inset-y-0 min-[769px]:left-0 min-[769px]:w-[260px] min-[769px]:z-30 min-[769px]:flex min-[769px]:flex-col min-[769px]:justify-between border-r border-white/10 bg-[#0f0f0f] px-4 py-6">
+        <div>
+          <div className="px-2">
+            <h2 className="text-xs font-bold tracking-[0.22em] text-[#a78bfa] uppercase">Study Buddy</h2>
+          </div>
+          <nav className="mt-8 space-y-2">
+            <button
+              onClick={handleSessionHistoryClick}
+              className={`w-full flex items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors ${
+                sessionHistoryOpen ? "bg-[#7c3aed]/20 text-[#ddd6fe]" : "text-[#857ca2] hover:bg-white/5"
+              }`}
+            >
+              <FolderOpen className="w-4 h-4" />
+              <span className="text-sm font-medium">Sessions</span>
+            </button>
+            <button
+              onClick={handleTestHistoryClick}
+              className={`w-full flex items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors ${
+                testHistoryOpen ? "bg-[#7c3aed]/20 text-[#ddd6fe]" : "text-[#857ca2] hover:bg-white/5"
+              }`}
+            >
+              <Clock3 className="w-4 h-4" />
+              <span className="text-sm font-medium">Tests</span>
+            </button>
+            <button
+              onClick={handleMenuClick}
+              className={`w-full flex items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors ${
+                menuOpen ? "bg-[#7c3aed]/20 text-[#ddd6fe]" : "text-[#857ca2] hover:bg-white/5"
+              }`}
+            >
+              <Menu className="w-4 h-4" />
+              <span className="text-sm font-medium">Menu</span>
+            </button>
+          </nav>
+        </div>
 
-      {/* Main Content */}
-      <div className="pt-16 sm:pt-20 px-3 sm:px-4 pb-20 sm:pb-24 max-w-3xl mx-auto flex flex-col gap-8">
-        {!testMode && !showResults && (
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, ease: "easeOut" }}
-            className="flex flex-col gap-8"
+        <div className="space-y-4">
+          <motion.button
+            whileTap={{ scale: 0.98 }}
+            onClick={handleNewSession}
+            disabled={loading || uploading}
+            className="w-full inline-flex items-center justify-center gap-2 min-h-[48px] rounded-xl bg-gradient-to-r from-[#7c3aed] to-[#a78bfa] text-white font-semibold tracking-wide disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {/* Hero Section */}
-            <div className="mb-8">
-              {/* Top Row: Made by aawaz (left) + NEW SESSION (right) */}
-              <div className="flex items-center justify-between mb-4">
-                {/* Made by aawaz - highlighted */}
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gradient-to-r from-[#a78bfa]/20 to-[#f9a8d4]/20 border border-[#a78bfa]/30">
-                  <span className="text-xs font-medium bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] bg-clip-text text-transparent">
-                    ✨ made by aawaz
-                  </span>
-                </div>
+            <Plus className="w-4 h-4" />
+            NEW SESSION
+          </motion.button>
+          <p className="px-2 text-xs text-[#857ca2]">made by aawaz</p>
+        </div>
+      </aside>
 
-                {/* NEW SESSION Button - Top Right */}
-                <motion.button
-                  whileTap={{ scale: 0.95, opacity: 0.6 }}
-                  onClick={() => {
-                    const hasContent = text.trim() || attachments.length > 0 || generations.length > 0;
-                    if (!hasContent && !sessionId) {
-                      toast("Please use your current session first", { icon: "📝" });
-                      return;
-                    }
-                    resetSession();
-                    toast.success("New session started.");
-                  }}
-                  disabled={loading || uploading}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-xs tracking-wide bg-white/5 border border-white/10 text-[#ddd6fe] hover:bg-white/8 active:bg-white/12 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  NEW SESSION
-                </motion.button>
-              </div>
-
-              {/* Title and Help - Centered */}
-              <div className="text-center">
-                <div className="flex items-center justify-center gap-3 mb-3">
-                  <Sparkles className="w-6 h-6 text-[#a78bfa]" />
-                  <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] bg-clip-text text-transparent">
-                    Study Buddy
-                  </h1>
-                  <motion.button
-                    whileHover={{ scale: 1.1, rotate: 15 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => setHelpOpen(!helpOpen)}
-                    className="p-2 rounded-full hover:bg-white/10 transition-colors"
-                    aria-label="Help"
-                  >
-                    <CircleHelp className={`w-5 h-5 transition-colors ${helpOpen ? 'text-[#a78bfa]' : 'text-[#f9a8d4]'}`} />
-                  </motion.button>
-                </div>
-                <p className="text-[#857ca2] text-sm">
-                  Turn notes into smart questions with AI
-                </p>
-                {!user && (
-                  <p className="text-[#a78bfa]/70 text-xs mt-2">
-                    Sign in to save your progress and history
+      <div className="pt-20 sm:pt-24 px-3 sm:px-4 pb-24 min-[769px]:pb-10 min-[769px]:pl-[292px]">
+        <div className="max-w-3xl mx-auto flex flex-col gap-8">
+          {!testMode && !showResults && (
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, ease: "easeOut" }}
+              className="flex flex-col gap-8"
+            >
+              <div className="mb-8">
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-3 mb-3">
+                    <Sparkles className="w-6 h-6 text-[#a78bfa]" />
+                    <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] bg-clip-text text-transparent">
+                      Study Buddy
+                    </h1>
+                    <motion.button
+                      whileHover={{ scale: 1.1, rotate: 15 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => setHelpOpen(!helpOpen)}
+                      className="p-2 rounded-full hover:bg-white/10 transition-colors"
+                      aria-label="Help"
+                    >
+                      <CircleHelp className={`w-5 h-5 transition-colors ${helpOpen ? "text-[#a78bfa]" : "text-[#f9a8d4]"}`} />
+                    </motion.button>
+                  </div>
+                  <p className="text-[#857ca2] text-sm">
+                    Turn notes into smart questions with AI
                   </p>
+                  {!user && (
+                    <p className="text-[#a78bfa]/70 text-xs mt-2">
+                      Sign in to save your progress and history
+                    </p>
+                  )}
+                </div>
+
+                {hasResults && (
+                  <div className="mt-6 flex justify-center">
+                    <motion.button
+                      whileTap={{ scale: 0.95, opacity: 0.6 }}
+                      onClick={() => setTestOptionsOpen(true)}
+                      disabled={loading || uploading}
+                      className="inline-flex items-center gap-2 min-h-[48px] px-6 py-3 rounded-2xl font-medium text-sm tracking-wide bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] text-white shadow-lg active:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <BookOpen className="w-4 h-4" />
+                      TAKE TEST
+                    </motion.button>
+                  </div>
                 )}
               </div>
-
-              {/* TAKE TEST Button - Centered, only show if has questions */}
-              {hasResults && (
-                <div className="mt-6 flex justify-center">
-                  <motion.button
-                    whileTap={{ scale: 0.95, opacity: 0.6 }}
-                    onClick={() => setTestOptionsOpen(true)}
-                    disabled={loading || uploading}
-                    className="inline-flex items-center gap-2 min-h-[48px] px-6 py-3 rounded-2xl font-medium text-sm tracking-wide bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] text-white shadow-lg active:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <BookOpen className="w-4 h-4" />
-                    TAKE TEST
-                  </motion.button>
-                </div>
-              )}
-            </div>
 
             {/* Help Modal */}
             <AnimatePresence>
@@ -1074,6 +1125,54 @@ export default function Home() {
           </motion.div>
         )}
       </div>
+      </div>
+
+      <motion.button
+        whileTap={{ scale: 0.9 }}
+        onClick={handleNewSession}
+        disabled={loading || uploading}
+        className="fixed max-[768px]:flex min-[769px]:hidden items-center justify-center right-4 bottom-24 z-40 w-14 h-14 rounded-full bg-gradient-to-r from-[#7c3aed] to-[#a78bfa] text-white shadow-[0_12px_30px_rgba(124,58,237,0.45)] disabled:opacity-50 disabled:cursor-not-allowed"
+        aria-label="New session"
+      >
+        <Plus className="w-6 h-6" />
+      </motion.button>
+
+      <nav className="fixed max-[768px]:flex min-[769px]:hidden items-center justify-around bottom-0 left-0 right-0 z-30 border-t border-white/10 bg-[#0f0f0f]/95 backdrop-blur-xl px-2 py-2">
+        <button
+          onClick={handleHomeClick}
+          className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-[#ddd6fe] hover:bg-white/5"
+          aria-label="Home"
+        >
+          <House className="w-5 h-5" />
+        </button>
+        <button
+          onClick={handleSessionHistoryClick}
+          className={`min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl ${
+            sessionHistoryOpen ? "text-[#a78bfa] bg-white/5" : "text-[#857ca2]"
+          }`}
+          aria-label="Sessions"
+        >
+          <FolderOpen className="w-5 h-5" />
+        </button>
+        <button
+          onClick={handleTestHistoryClick}
+          className={`min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl ${
+            testHistoryOpen ? "text-[#a78bfa] bg-white/5" : "text-[#857ca2]"
+          }`}
+          aria-label="Tests"
+        >
+          <Clock3 className="w-5 h-5" />
+        </button>
+        <button
+          onClick={handleMenuClick}
+          className={`min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl ${
+            menuOpen ? "text-[#a78bfa] bg-white/5" : "text-[#857ca2]"
+          }`}
+          aria-label="Menu"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+      </nav>
 
       {/* Session History Sidebar (LEFT) */}
       <Sidebar
@@ -1207,7 +1306,7 @@ export default function Home() {
               whileTap={{ scale: 0.98, opacity: 0.6 }}
               onClick={() => {
                 setMenuOpen(false);
-                resetSession();
+                handleNewSession();
               }}
               className="w-full text-left p-4 rounded-2xl bg-white/5 hover:bg-white/8 active:bg-white/12 transition-all text-[#ddd6fe] flex items-center gap-3 border border-white/10 hover:border-white/15"
             >
@@ -1220,6 +1319,7 @@ export default function Home() {
               </div>
             </motion.button>
           </div>
+          <p className="min-[769px]:hidden mt-6 text-center text-xs text-[#857ca2]">made by aawaz</p>
         </div>
       </BottomSheet>
 
