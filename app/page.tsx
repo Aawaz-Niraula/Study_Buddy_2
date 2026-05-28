@@ -38,15 +38,15 @@ declare global {
 
 const MAX_IMAGE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB raw (will be compressed)
 const MAX_PDF_SIZE_BYTES = 15 * 1024 * 1024; // 15MB
-const MAX_IMAGES = 3;
+const MAX_IMAGES = 4;
 const sanitizeUploadName = (name: string) =>
   name.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || "upload.jpg";
 
-type SourceKind = "text" | "pdf" | "image" | null;
+type SourceKind = "text" | "pdf" | "document" | "image" | null;
 type Attachment = {
   id: string;
   name: string;
-  type: "pdf" | "image";
+  type: "pdf" | "document" | "image";
   extractedText?: string;
   mimeType: string;
   dataUrl?: string;
@@ -280,29 +280,32 @@ export default function Home() {
   }, [authLoading, user?.id]);
 
   // ─── PDF Upload via Vercel Blob ──────────────────────────────
-  const uploadPdfViaBlob = async (file: File): Promise<string> => {
-    setUploadStatus("Uploading PDF...");
+  const uploadDocumentViaBlob = async (file: File, kind: "pdf" | "document"): Promise<string> => {
+    setUploadStatus(`Uploading ${kind === "pdf" ? "PDF" : "document"}...`);
     const safeName = sanitizeUploadName(file.name);
-    const blob = await upload(`study-buddy-pdfs/${Date.now()}-${safeName}`, file, {
+    const contentType = kind === "pdf"
+      ? "application/pdf"
+      : file.type || "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    const blob = await upload(`study-buddy-documents/${Date.now()}-${safeName}`, file, {
       access: "public",
-      contentType: "application/pdf",
+      contentType,
       handleUploadUrl: "/api/blob/upload",
-      clientPayload: JSON.stringify({ kind: "pdf" }),
+      clientPayload: JSON.stringify({ kind }),
     });
 
-    setUploadStatus("Extracting PDF text...");
+    setUploadStatus(`Extracting ${kind === "pdf" ? "PDF" : "document"} text...`);
     const res = await fetch("/api/upload-pdf/process", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: blob.url }),
+      body: JSON.stringify({ url: blob.url, kind }),
     });
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(data.error || "Failed to upload PDF");
+      throw new Error(data.error || `Failed to upload ${kind === "pdf" ? "PDF" : "document"}`);
     }
 
-    setUploadStatus(`Extracted text from ${data.pages || "?"} pages.`);
+    setUploadStatus(`Extracted text from ${data.pages || "?"} ${kind === "pdf" ? "pages" : "document"}.`);
     return data.text || "";
   };
 
@@ -349,12 +352,18 @@ export default function Home() {
       const incomingKind: SourceKind =
         files[0].type === "application/pdf" || files[0].name.toLowerCase().endsWith(".pdf")
           ? "pdf"
+          : files[0].type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+              files[0].name.toLowerCase().endsWith(".docx") ||
+              files[0].name.toLowerCase().endsWith(".doc")
+            ? "document"
           : "image";
 
       if (sourceKind && sourceKind !== incomingKind)
         throw new Error("Only one source type is allowed in a session.");
       if (incomingKind === "pdf" && (files.length > 1 || attachments.length > 0))
         throw new Error("Only one PDF can be used in a session.");
+      if (incomingKind === "document" && (files.length > 1 || attachments.length > 0))
+        throw new Error("Only one document can be used in a session.");
 
       // Image count limit
       if (incomingKind === "image") {
@@ -367,24 +376,33 @@ export default function Home() {
       const parsed: Attachment[] = [];
       for (const file of files) {
         const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+        const isDocument =
+          file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+          file.name.toLowerCase().endsWith(".docx") ||
+          file.name.toLowerCase().endsWith(".doc");
         const isImage = file.type.startsWith("image/");
 
         if (incomingKind === "pdf" && !isPdf) throw new Error("PDF sessions can only contain a PDF.");
+        if (incomingKind === "document" && !isDocument)
+          throw new Error("Document sessions can only contain a DOCX file.");
         if (incomingKind === "image" && !isImage)
           throw new Error("Photo sessions can only contain images.");
         if (isPdf && file.size > MAX_PDF_SIZE_BYTES) throw new Error(`${file.name}: PDF too large (max 15MB).`);
+        if (isDocument && file.size > MAX_PDF_SIZE_BYTES) throw new Error(`${file.name}: document too large (max 15MB).`);
         if (isImage && file.size > MAX_IMAGE_SIZE_BYTES)
           throw new Error(`${file.name}: image too large (max 20MB before compression).`);
 
-        if (isPdf) {
-          // Use Vercel Blob upload for PDFs
-          const extractedText = await uploadPdfViaBlob(file);
+        if (isPdf || isDocument) {
+          if (file.name.toLowerCase().endsWith(".doc")) {
+            throw new Error(`${file.name}: .doc files are not supported yet. Please upload a .docx file.`);
+          }
+          const extractedText = await uploadDocumentViaBlob(file, isPdf ? "pdf" : "document");
           parsed.push({
             id: `${file.name}-${file.size}-${file.lastModified}`,
             name: file.name,
-            type: "pdf",
+            type: isPdf ? "pdf" : "document",
             extractedText: extractedText.trim(),
-            mimeType: "application/pdf",
+            mimeType: isPdf ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             origin,
           });
         } else {

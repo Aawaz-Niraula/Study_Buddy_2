@@ -2,8 +2,8 @@ import { createClient } from "@libsql/client";
 import { del } from "@vercel/blob";
 import { getAuthenticatedUserId } from "@/lib/supabase-api-auth";
 
-const TEXT_MODEL = "llama3.1-8b";
-const VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
+const PRIMARY_MODEL = process.env.DEEPINFRA_MODEL || "google/gemma-4-26B-A4B-it";
+const DEEPINFRA_BASE_URL = "https://api.deepinfra.com/v1/openai";
 const ALLOWED_MODES = new Set(["multiple-choice", "flashcard", "short-answer", "true-false", "mix"]);
 const ALLOWED_DIFFICULTIES = new Set(["easy", "medium", "difficult"]);
 const MAX_TEXT_SOURCE_CHARS = 12000;
@@ -26,7 +26,7 @@ Output format:
 
 type AttachmentPayload = {
   name?: string;
-  type?: "pdf" | "image";
+  type?: "pdf" | "image" | "document";
   extractedText?: string;
   dataUrl?: string;
   blobUrl?: string;
@@ -36,7 +36,7 @@ type AttachmentPayload = {
 
 type SourcePayload =
   | { text: string }
-  | { text: string; attachments: Array<{ name?: string; type?: "pdf" | "image" }> }
+  | { text: string; attachments: Array<{ name?: string; type?: "pdf" | "image" | "document" }> }
   | { attachments: AttachmentPayload[] };
 
 let schemaReadyPromise: Promise<unknown> | undefined;
@@ -111,6 +111,12 @@ Source type: image/photo
 Image files: ${attachments.map((item) => item.name).join(", ")}
 
 Look carefully at the images and generate study questions from the visible material.`;
+}
+
+function buildDocumentSourceLabel(sourceKind: string) {
+  if (sourceKind === "pdf") return "pdf";
+  if (sourceKind === "document") return "document";
+  return "notes";
 }
 
 function normalizeQuestionSet(data: unknown) {
@@ -214,16 +220,20 @@ function summarizeTitle(sourceKind: string, sourcePayload: SourcePayload) {
   const names = Array.isArray((sourcePayload as { attachments?: AttachmentPayload[] }).attachments)
     ? (sourcePayload as { attachments: AttachmentPayload[] }).attachments.map((item) => item.name).filter(Boolean)
     : [];
-  return names[0] || `${sourceKind === "pdf" ? "PDF" : "Photo"} session`;
+  return names[0] || `${sourceKind === "pdf" ? "PDF" : sourceKind === "document" ? "Document" : "Photo"} session`;
 }
 
 function detectSourceKind(text: string, attachments: AttachmentPayload[]) {
   if (text) return "text";
   if (!attachments.length) return null;
   const hasPdf = attachments.some((item) => item?.type === "pdf");
+  const hasDocument = attachments.some((item) => item?.type === "document");
   const hasImage = attachments.some((item) => item?.type === "image");
-  if (hasPdf && hasImage) throw new Error("Use only one source type per session.");
+  if ([hasPdf, hasDocument, hasImage].filter(Boolean).length > 1) {
+    throw new Error("Use only one source type per session.");
+  }
   if (hasPdf) return "pdf";
+  if (hasDocument) return "document";
   if (hasImage) return "image";
   throw new Error("Unsupported attachment type.");
 }
@@ -392,20 +402,10 @@ async function callOpenAiCompatibleChat({
   return raw;
 }
 
-async function callGroqJson({ apiKey, model, messages, maxTokens = 2048 }: { apiKey: string; model: string; messages: unknown[]; maxTokens?: number }) {
+async function callDeepInfraJson({ apiKey, model, messages, maxTokens = 2048 }: { apiKey: string; model: string; messages: unknown[]; maxTokens?: number }) {
   return parseModelJson(await callOpenAiCompatibleChat({
     apiKey,
-    baseUrl: "https://api.groq.com/openai/v1",
-    model,
-    messages,
-    maxTokens,
-  }));
-}
-
-async function callCerebrasJson({ apiKey, model, messages, maxTokens = 2048 }: { apiKey: string; model: string; messages: unknown[]; maxTokens?: number }) {
-  return parseModelJson(await callOpenAiCompatibleChat({
-    apiKey,
-    baseUrl: "https://api.cerebras.ai/v1",
+    baseUrl: DEEPINFRA_BASE_URL,
     model,
     messages,
     maxTokens,
@@ -425,43 +425,43 @@ async function generateQuestions({
   mode: string;
   difficulty: string;
 }) {
-  if (sourceKind === "text" || sourceKind === "pdf") {
+  if (sourceKind === "text" || sourceKind === "pdf" || sourceKind === "document") {
     const rawText = String((sourcePayload as { text?: string }).text ?? "").trim();
-    const text = sourceKind === "pdf" ? trimPdfText(rawText) : rawText;
+    const text = sourceKind === "pdf" || sourceKind === "document" ? trimPdfText(rawText) : rawText;
     if (text.length < 10) throw new Error("Text too short (min 10 characters)");
     if (sourceKind === "text" && text.length > MAX_TEXT_SOURCE_CHARS) {
       throw new Error("Text too long (max 12000 characters)");
     }
-    const questions = normalizeQuestionSet(await callCerebrasJson({
+    const questions = normalizeQuestionSet(await callDeepInfraJson({
       apiKey,
-      model: TEXT_MODEL,
+      model: PRIMARY_MODEL,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: buildTextPrompt(mode, difficulty, sourceKind === "text" ? "notes" : "pdf", text) },
+        { role: "user", content: buildTextPrompt(mode, difficulty, buildDocumentSourceLabel(sourceKind), text) },
       ],
     }));
-    return { questions, modelUsed: TEXT_MODEL };
+    return { questions, modelUsed: PRIMARY_MODEL };
   }
 
   const attachments = Array.isArray((sourcePayload as { attachments?: AttachmentPayload[] }).attachments)
     ? (sourcePayload as { attachments: AttachmentPayload[] }).attachments
     : [];
   const imageParts = attachments
-    .slice(0, 3)
+    .slice(0, 4)
     .map((item) => getImageSourceUrl(item))
     .filter(Boolean)
     .map((url) => ({ type: "image_url", image_url: { url } }));
   if (!imageParts.length) throw new Error("No usable images were found.");
-  const questions = normalizeQuestionSet(await callGroqJson({
+  const questions = normalizeQuestionSet(await callDeepInfraJson({
     apiKey,
-    model: VISION_MODEL,
+    model: PRIMARY_MODEL,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: [{ type: "text", text: buildVisionPrompt(mode, difficulty, attachments) }, ...imageParts] },
     ],
     maxTokens: 2500,
   }));
-  return { questions, modelUsed: VISION_MODEL };
+  return { questions, modelUsed: PRIMARY_MODEL };
 }
 
 function flattenQuestions(questionSet: Record<string, unknown>) {
@@ -505,7 +505,7 @@ async function generateTest({
   const sourcePayload = session.source_payload as SourcePayload;
   let contextText = "";
 
-  if (sourceKind === "text" || sourceKind === "pdf") {
+  if (sourceKind === "text" || sourceKind === "pdf" || sourceKind === "document") {
     contextText = String((sourcePayload as { text?: string }).text ?? "").trim();
   } else {
     contextText = "Generate a test from the uploaded images in this current session.";
@@ -539,9 +539,9 @@ Current session context:
 ${contextText}${previousContext}`;
 
   const questions = sourceKind === "image"
-    ? normalizeQuestionSet(await callGroqJson({
+    ? normalizeQuestionSet(await callDeepInfraJson({
         apiKey,
-        model: VISION_MODEL,
+        model: PRIMARY_MODEL,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           {
@@ -549,7 +549,7 @@ ${contextText}${previousContext}`;
             content: [
               { type: "text", text: prompt },
               ...((sourcePayload as { attachments?: AttachmentPayload[] }).attachments ?? [])
-                .slice(0, 3)
+                .slice(0, 4)
                 .map((item) => getImageSourceUrl(item))
                 .filter(Boolean)
                 .map((url) => ({ type: "image_url", image_url: { url } })),
@@ -558,9 +558,9 @@ ${contextText}${previousContext}`;
         ],
         maxTokens: 2500,
       }))
-    : normalizeQuestionSet(await callCerebrasJson({
+    : normalizeQuestionSet(await callDeepInfraJson({
         apiKey,
-        model: TEXT_MODEL,
+        model: PRIMARY_MODEL,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: prompt },
@@ -588,9 +588,9 @@ Return JSON only in this format:
 Questions:
 ${JSON.stringify(questions.map((q, i) => ({ index: i, question: q.question, expected_answer: q.answer, student_answer: answers[`sa-${i}`] ?? "" })))}`;
 
-  const result = await callCerebrasJson({
+  const result = await callDeepInfraJson({
     apiKey,
-    model: TEXT_MODEL,
+    model: PRIMARY_MODEL,
     messages: [
       { role: "system", content: "You are a strict but fair grading assistant. Return JSON only." },
       { role: "user", content: prompt },
@@ -663,14 +663,11 @@ export async function POST(request: Request) {
       if (!sessionId) return makeResponse(422, { detail: "sessionId is required for tests." });
       const session = await getSessionById(sessionId, userId);
       if (!session) return makeResponse(404, { detail: "Session not found" });
-      if (session.source_kind === "image" && !process.env.GROQ_API_KEY) {
-        return makeResponse(500, { detail: "GROQ_API_KEY not configured" });
-      }
-      if (session.source_kind !== "image" && !process.env.CEREBRAS_API_KEY) {
-        return makeResponse(500, { detail: "CEREBRAS_API_KEY not configured" });
+      if (!process.env.DEEPINFRA_API_KEY) {
+        return makeResponse(500, { detail: "DEEPINFRA_API_KEY not configured" });
       }
       const testQuestions = await generateTest({
-        apiKey: session.source_kind === "image" ? process.env.GROQ_API_KEY! : process.env.CEREBRAS_API_KEY!,
+        apiKey: process.env.DEEPINFRA_API_KEY,
         session,
         includePrevious: Boolean((body as { includePrevious?: boolean }).includePrevious),
         userId,
@@ -687,11 +684,11 @@ export async function POST(request: Request) {
     }
 
     if (action === "grade_short_answers") {
-      if (!process.env.CEREBRAS_API_KEY) return makeResponse(500, { detail: "CEREBRAS_API_KEY not configured" });
+      if (!process.env.DEEPINFRA_API_KEY) return makeResponse(500, { detail: "DEEPINFRA_API_KEY not configured" });
       const questions = Array.isArray((body as { questions?: Array<{ question?: string; answer?: string }> }).questions) ? (body as { questions: Array<{ question?: string; answer?: string }> }).questions : [];
       const answers = typeof (body as { answers?: Record<string, string> }).answers === "object" && (body as { answers?: Record<string, string> }).answers !== null ? (body as { answers: Record<string, string> }).answers : {};
       return makeResponse(200, await evaluateShortAnswers({
-        apiKey: process.env.CEREBRAS_API_KEY,
+        apiKey: process.env.DEEPINFRA_API_KEY,
         questions,
         answers,
       }));
@@ -710,15 +707,16 @@ export async function POST(request: Request) {
       sourcePayload = existing.source_payload as SourcePayload;
     } else {
       sourceKind = detectSourceKind(text, attachments);
-      if (!sourceKind) return makeResponse(422, { detail: "Please add notes, one PDF, or one or more photos." });
+      if (!sourceKind) return makeResponse(422, { detail: "Please add notes, a PDF, a DOCX, or one or more photos." });
       const imageCount = attachments.filter((a) => a?.type === "image").length;
-      if (sourceKind === "image" && imageCount > 3) {
-        return makeResponse(422, { detail: "Maximum 3 images per request." });
+      if (sourceKind === "image" && imageCount > 4) {
+        return makeResponse(422, { detail: "Maximum 4 images per request." });
       }
       if (sourceKind === "pdf" && attachments.length !== 1) return makeResponse(422, { detail: "Only one PDF can be used in a session." });
+      if (sourceKind === "document" && attachments.length !== 1) return makeResponse(422, { detail: "Only one document can be used in a session." });
       sourcePayload = sourceKind === "text"
         ? { text }
-        : sourceKind === "pdf"
+        : sourceKind === "pdf" || sourceKind === "document"
           ? { text: String(attachments[0]?.extractedText ?? ""), attachments: attachments.map((item) => ({ name: item.name, type: item.type })) }
           : {
               attachments: attachments.map((item) => ({
@@ -732,15 +730,12 @@ export async function POST(request: Request) {
             };
     }
 
-    if (sourceKind === "image" && !process.env.GROQ_API_KEY) {
-      return makeResponse(500, { detail: "GROQ_API_KEY not configured" });
-    }
-    if (sourceKind !== "image" && !process.env.CEREBRAS_API_KEY) {
-      return makeResponse(500, { detail: "CEREBRAS_API_KEY not configured" });
+    if (!process.env.DEEPINFRA_API_KEY) {
+      return makeResponse(500, { detail: "DEEPINFRA_API_KEY not configured" });
     }
 
     const { questions, modelUsed } = await generateQuestions({
-      apiKey: sourceKind === "image" ? process.env.GROQ_API_KEY! : process.env.CEREBRAS_API_KEY!,
+      apiKey: process.env.DEEPINFRA_API_KEY,
       sourceKind,
       sourcePayload,
       mode,

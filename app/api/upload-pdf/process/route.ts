@@ -6,10 +6,12 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const MAX_PDF_BYTES = 15 * 1024 * 1024;
+const MAX_DOCUMENT_BYTES = 15 * 1024 * 1024;
 type PdfParseResult = {
   text: string;
   numpages: number;
 };
+type UploadKind = "pdf" | "document";
 
 function isPdfParseResult(value: unknown): value is PdfParseResult {
   if (!value || typeof value !== "object") return false;
@@ -42,8 +44,9 @@ export async function POST(request: Request) {
 
   let blobUrl: string | null = null;
   try {
-    const body = await request.json().catch(() => null) as { url?: string } | null;
+    const body = await request.json().catch(() => null) as { url?: string; kind?: string } | null;
     const url = typeof body?.url === "string" ? body.url.trim() : "";
+    const kind: UploadKind = body?.kind === "document" ? "document" : "pdf";
     if (!url || !isTrustedBlobUrl(url)) {
       return NextResponse.json({ error: "Invalid or untrusted file URL." }, { status: 400 });
     }
@@ -58,26 +61,36 @@ export async function POST(request: Request) {
     }
 
     const contentLength = fileRes.headers.get("content-length");
-    if (contentLength && Number(contentLength) > MAX_PDF_BYTES) {
-      return NextResponse.json({ error: "PDF exceeds 15MB limit." }, { status: 400 });
+    const maxBytes = kind === "pdf" ? MAX_PDF_BYTES : MAX_DOCUMENT_BYTES;
+    if (contentLength && Number(contentLength) > maxBytes) {
+      return NextResponse.json({ error: `${kind === "pdf" ? "PDF" : "Document"} exceeds 15MB limit.` }, { status: 400 });
     }
 
     const arrayBuffer = await fileRes.arrayBuffer();
-    if (arrayBuffer.byteLength > MAX_PDF_BYTES) {
-      return NextResponse.json({ error: "PDF exceeds 15MB limit." }, { status: 400 });
+    if (arrayBuffer.byteLength > maxBytes) {
+      return NextResponse.json({ error: `${kind === "pdf" ? "PDF" : "Document"} exceeds 15MB limit.` }, { status: 400 });
+    }
+
+    const buffer = Buffer.from(arrayBuffer);
+    if (kind === "document") {
+      const mammoth = await import("mammoth");
+      const docData = await mammoth.extractRawText({ buffer });
+      return NextResponse.json({
+        success: true,
+        text: docData.value || "",
+        pages: null,
+      });
     }
 
     const pdfParse = (await import("pdf-parse")).default;
-    const buffer = Buffer.from(arrayBuffer);
     const pdfData = await pdfParse(buffer);
     if (!isPdfParseResult(pdfData)) {
       throw new Error("Could not parse PDF text.");
     }
-    const extractedText = pdfData.text;
 
     return NextResponse.json({
       success: true,
-      text: extractedText,
+      text: pdfData.text,
       pages: pdfData.numpages,
     });
   } catch (error) {

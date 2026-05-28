@@ -2,11 +2,11 @@
 
 import { useState, useCallback } from "react";
 
-export type SourceKind = "text" | "pdf" | "image" | null;
+export type SourceKind = "text" | "pdf" | "document" | "image" | null;
 export type Attachment = {
   id: string;
   name: string;
-  type: "pdf" | "image";
+  type: "pdf" | "document" | "image";
   extractedText?: string;
   mimeType: string;
   dataUrl?: string;

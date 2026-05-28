@@ -17,7 +17,7 @@ import {
 interface Attachment {
   id: string;
   name: string;
-  type: "pdf" | "image";
+  type: "pdf" | "document" | "image";
 }
 
 interface SessionFormProps {
@@ -144,7 +144,7 @@ export function SessionForm({
             ref={fileInputRef}
             type="file"
             multiple
-            accept=".pdf,image/*"
+            accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*"
             onChange={(e) => onFilesAdded(e, "upload")}
             className="hidden"
           />
@@ -168,7 +168,7 @@ export function SessionForm({
                   exit={{ opacity: 0, scale: 0.88 }}
                   className="flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 bg-[#a78bfa]/10 border border-[#a78bfa]/25 rounded-full text-sm max-w-[200px]"
                 >
-                  {attachment.type === "pdf" ? (
+                  {attachment.type === "pdf" || attachment.type === "document" ? (
                     <FileText className="w-3.5 h-3.5 text-[#a78bfa] shrink-0" />
                   ) : (
                     <ImageIcon className="w-3.5 h-3.5 text-[#a78bfa] shrink-0" />

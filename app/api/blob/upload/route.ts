@@ -5,6 +5,7 @@ import { getAuthenticatedUserId } from "@/lib/supabase-api-auth";
 export const runtime = "nodejs";
 
 const MAX_PDF_BYTES = 15 * 1024 * 1024;
+const MAX_DOCUMENT_BYTES = 15 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 /**
@@ -36,18 +37,26 @@ export async function POST(request: Request) {
           payload = null;
         }
 
-        const kind = payload?.kind === "image" ? "image" : "pdf";
-        return kind === "image"
-          ? {
-              allowedContentTypes: ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"],
-              maximumSizeInBytes: MAX_IMAGE_BYTES,
-              addRandomSuffix: true,
-            }
-          : {
-              allowedContentTypes: ["application/pdf"],
-              maximumSizeInBytes: MAX_PDF_BYTES,
-              addRandomSuffix: true,
-            };
+        const kind = payload?.kind === "image" ? "image" : payload?.kind === "document" ? "document" : "pdf";
+        if (kind === "image") {
+          return {
+            allowedContentTypes: ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"],
+            maximumSizeInBytes: MAX_IMAGE_BYTES,
+            addRandomSuffix: true,
+          };
+        }
+        if (kind === "document") {
+          return {
+            allowedContentTypes: ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+            maximumSizeInBytes: MAX_DOCUMENT_BYTES,
+            addRandomSuffix: true,
+          };
+        }
+        return {
+          allowedContentTypes: ["application/pdf"],
+          maximumSizeInBytes: MAX_PDF_BYTES,
+          addRandomSuffix: true,
+        };
       },
       onUploadCompleted: async () => {
         // Extraction and blob deletion happen in /api/upload-pdf/process
