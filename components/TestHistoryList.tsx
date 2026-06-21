@@ -117,7 +117,7 @@ export function TestHistoryList({
             {/* Score and Badge Row */}
             <div className="flex items-center justify-between gap-2 mb-2">
               <div className={`text-base font-bold ${colors.text} truncate`}>
-                {test.score}/{test.total} — {percentage}%
+                {test.score}/{test.total} · {percentage}%
               </div>
               <div
                 className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold text-white ${colors.badge}`}

@@ -82,7 +82,7 @@ export const COLOR_ORDER: MascotColor[] = ["violet", "cyan", "coral", "green", "
 export type DesignMeta = {
   id: MascotDesign;
   label: string;
-  /** caption shown under the preview — changes per design, not per mood */
+  /** caption shown under the preview - changes per design, not per mood */
   caption: string;
 };
 

@@ -24,6 +24,20 @@ Output format:
   "flashcards": [{"question": "", "answer": ""}]
 }`;
 
+const AAWAX_SYSTEM_PROMPT = `You are Aawax, the friendly mascot and study buddy who lives inside the "Study Buddy" app.
+
+Personality and rules:
+- You are warm, encouraging, patient, and a little playful. You talk like a supportive friend, not a textbook.
+- Keep replies concise and easy to read. Use short paragraphs. Avoid long bullet dumps unless the student asks for steps.
+- Never use em dashes. Write the way a friendly person texts.
+- You help students understand their study material, explain concepts simply, and motivate them.
+- You were created by Aawaz, an enthusiastic developer who also built "Aawaz Speaker Coach". If asked who made you, mention Aawaz warmly.
+- You know you live in the Study Buddy app, which turns notes, PDFs, and photos into study questions and tests.
+- You can see the student's recent test scores and the kinds of questions they get wrong (provided below). Use this to answer questions like "what is my score trend", "where do I need to improve", and "what kind of questions do I get wrong".
+- When a student gets a question wrong and asks you to elaborate, explain the correct answer clearly and kindly, then give one quick tip to remember it.
+- If you do not have enough data about the student, say so gently and encourage them to take a few tests.`;
+
+
 type AttachmentPayload = {
   name?: string;
   type?: "pdf" | "image" | "document";
@@ -606,6 +620,143 @@ ${JSON.stringify(questions.map((q, i) => ({ index: i, question: q.question, expe
   };
 }
 
+// ─── Study insights (for Aawax chat) ───────────────────────────
+type WrongAnswer = { type: string; question: string; correctAnswer: string };
+
+function collectWrongAnswers(submission: Record<string, unknown>): WrongAnswer[] {
+  const wrong: WrongAnswer[] = [];
+  const questions = (submission.questions ?? {}) as Record<string, unknown>;
+  const answers = (submission.answers ?? {}) as Record<string, string>;
+  const evals = Array.isArray(submission.shortAnswerEvaluations)
+    ? (submission.shortAnswerEvaluations as Array<{ index?: number; correct?: boolean }>)
+    : [];
+
+  const mcq = Array.isArray(questions.multiple_choice) ? questions.multiple_choice : [];
+  mcq.forEach((q: Record<string, unknown>, i: number) => {
+    const expected = String(q.answer ?? "").trim().toUpperCase().match(/[A-D]/)?.[0] || "";
+    if ((answers[`mcq-${i}`] ?? "") !== expected) {
+      wrong.push({ type: "multiple-choice", question: String(q.question ?? ""), correctAnswer: String(q.answer ?? "") });
+    }
+  });
+  const tf = Array.isArray(questions.true_false) ? questions.true_false : [];
+  tf.forEach((q: Record<string, unknown>, i: number) => {
+    const expected = typeof q.answer === "boolean" ? (q.answer ? "True" : "False") : String(q.answer);
+    if ((answers[`tf-${i}`] ?? "") !== expected) {
+      wrong.push({ type: "true-false", question: String(q.statement ?? ""), correctAnswer: expected });
+    }
+  });
+  const sa = Array.isArray(questions.short_answer) ? questions.short_answer : [];
+  sa.forEach((q: Record<string, unknown>, i: number) => {
+    const evaluation = evals.find((e) => e.index === i);
+    if (evaluation && evaluation.correct === false) {
+      wrong.push({ type: "short-answer", question: String(q.question ?? ""), correctAnswer: String(q.answer ?? "") });
+    }
+  });
+  return wrong;
+}
+
+async function computeStudyInsights(userId: string) {
+  const sessions = await listSessions(userId);
+  const scores: Array<{ pct: number; title: string; at: string }> = [];
+  const wrongByType: Record<string, number> = { "multiple-choice": 0, "true-false": 0, "short-answer": 0 };
+  const wrongExamples: WrongAnswer[] = [];
+
+  for (const item of sessions) {
+    const full = await getSessionById(item.id, userId);
+    if (!full) continue;
+    const subs = Array.isArray(full.test_submissions) ? full.test_submissions : [];
+    for (const sub of subs as Array<Record<string, unknown>>) {
+      const total = Number(sub.total ?? 0);
+      const score = Number(sub.score ?? 0);
+      if (total > 0) {
+        scores.push({ pct: Math.round((score / total) * 100), title: full.title, at: String(sub.created_at ?? "") });
+      }
+      for (const w of collectWrongAnswers(sub)) {
+        wrongByType[w.type] = (wrongByType[w.type] ?? 0) + 1;
+        if (wrongExamples.length < 8 && w.question) wrongExamples.push(w);
+      }
+    }
+  }
+
+  scores.sort((a, b) => +new Date(a.at) - +new Date(b.at));
+  const pcts = scores.map((s) => s.pct);
+  const avg = pcts.length ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length) : 0;
+  const best = pcts.length ? Math.max(...pcts) : 0;
+  const recent = pcts.slice(-5);
+  let trend = "not enough data";
+  if (recent.length >= 2) {
+    const diff = recent[recent.length - 1] - recent[0];
+    trend = diff > 5 ? "improving" : diff < -5 ? "slipping" : "steady";
+  }
+  return { totalTests: pcts.length, avg, best, recent, trend, wrongByType, wrongExamples };
+}
+
+function buildInsightsContext(insights: Awaited<ReturnType<typeof computeStudyInsights>>) {
+  if (!insights.totalTests) {
+    return "Student data: The student has not completed any tests yet. Encourage them gently to take one.";
+  }
+  const lines = [
+    `Student data (use this to answer questions about their progress):`,
+    `- Tests taken: ${insights.totalTests}`,
+    `- Average score: ${insights.avg}%`,
+    `- Best score: ${insights.best}%`,
+    `- Recent scores (oldest to newest): ${insights.recent.join("%, ")}%`,
+    `- Score trend: ${insights.trend}`,
+    `- Wrong answers by type: multiple-choice ${insights.wrongByType["multiple-choice"]}, true/false ${insights.wrongByType["true-false"]}, short-answer ${insights.wrongByType["short-answer"]}`,
+    `Note: short-answer and difficult questions usually test deep conceptual understanding. If the student misses many of those, suggest they focus on understanding core concepts rather than memorising.`,
+  ];
+  if (insights.wrongExamples.length) {
+    lines.push(`- Examples of questions they got wrong:`);
+    for (const w of insights.wrongExamples.slice(0, 5)) {
+      lines.push(`  (${w.type}) ${w.question.slice(0, 140)}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+type ChatTurn = { role: "user" | "assistant"; content: string };
+
+async function chatWithAawax({
+  apiKey,
+  userId,
+  messages,
+  images,
+}: {
+  apiKey: string;
+  userId: string;
+  messages: ChatTurn[];
+  images: string[];
+}) {
+  const insights = await computeStudyInsights(userId);
+  const system = `${AAWAX_SYSTEM_PROMPT}\n\n${buildInsightsContext(insights)}`;
+
+  const trimmed = messages.slice(-10);
+  const finalMessages: unknown[] = [{ role: "system", content: system }];
+  trimmed.forEach((m, i) => {
+    const isLastUser = i === trimmed.length - 1 && m.role === "user";
+    if (isLastUser && images.length) {
+      finalMessages.push({
+        role: "user",
+        content: [
+          { type: "text", text: m.content },
+          ...images.slice(0, 3).map((url) => ({ type: "image_url", image_url: { url } })),
+        ],
+      });
+    } else {
+      finalMessages.push({ role: m.role, content: m.content });
+    }
+  });
+
+  const reply = await callOpenAiCompatibleChat({
+    apiKey,
+    baseUrl: DEEPINFRA_BASE_URL,
+    model: PRIMARY_MODEL,
+    messages: finalMessages,
+    maxTokens: 900,
+  });
+  return reply.trim();
+}
+
 // ─── Route handlers ────────────────────────────────────────────
 export async function OPTIONS() {
   return makeResponse(200, {});
@@ -673,6 +824,28 @@ export async function POST(request: Request) {
         userId,
       });
       return makeResponse(200, { questions: testQuestions });
+    }
+
+    if (action === "chat") {
+      if (!process.env.DEEPINFRA_API_KEY) return makeResponse(500, { detail: "DEEPINFRA_API_KEY not configured" });
+      const rawMessages = Array.isArray((body as { messages?: unknown[] }).messages)
+        ? (body as { messages: unknown[] }).messages
+        : [];
+      const messages: ChatTurn[] = rawMessages
+        .map((m) => m as { role?: string; content?: string })
+        .filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
+        .map((m) => ({ role: m.role as "user" | "assistant", content: String(m.content) }));
+      if (!messages.length) return makeResponse(422, { detail: "A message is required." });
+      const images = Array.isArray((body as { images?: unknown[] }).images)
+        ? (body as { images: unknown[] }).images.filter((u): u is string => typeof u === "string").slice(0, 3)
+        : [];
+      const reply = await chatWithAawax({
+        apiKey: process.env.DEEPINFRA_API_KEY,
+        userId,
+        messages,
+        images,
+      });
+      return makeResponse(200, { reply });
     }
 
     if (action === "submit_test") {

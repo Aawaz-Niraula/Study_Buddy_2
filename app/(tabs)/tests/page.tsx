@@ -15,7 +15,7 @@ import { buildReviewRows } from "@/lib/reviewQuestions";
 export default function TestsPage() {
   const router = useRouter();
   const { sessions, tests, loading, user } = useStudyData();
-  const { design, color } = useMascot();
+  const { design, color, openChat } = useMascot();
   const [reviewing, setReviewing] = useState<StudyTest | null>(null);
 
   if (reviewing) {
@@ -29,6 +29,7 @@ export default function TestsPage() {
         score={reviewing.score}
         total={reviewing.total}
         onClose={() => setReviewing(null)}
+        onAskAawax={(question) => openChat(`I got this question wrong:\n\n"${question}"\n\nElaborate, Aawax.`)}
       />
     );
   }
@@ -46,7 +47,7 @@ export default function TestsPage() {
       {!loading && (!user || sessions.length === 0) ? (
         <div className="app-card flex items-center gap-3 text-sm text-white/55">
           <PencilLine className="h-5 w-5 shrink-0" style={{ color: "var(--accent-soft)" }} />
-          {user ? "Generate questions first — then come back to test yourself." : "Sign in and generate questions to take tests."}
+          {user ? "Generate questions first, then come back to test yourself." : "Sign in and generate questions to take tests."}
         </div>
       ) : (
         <div className="space-y-2">

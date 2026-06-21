@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowLeft, CheckCircle, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle, XCircle, Sparkles } from "lucide-react";
 
 interface ReviewQuestion {
   question?: string;
@@ -18,99 +18,107 @@ interface TestReviewScreenProps {
   score: number;
   total: number;
   onClose: () => void;
+  onAskAawax?: (question: string) => void;
 }
 
-export function TestReviewScreen({
-  questions,
-  score,
-  total,
-  onClose,
-}: TestReviewScreenProps) {
-  const percentage = Math.round((score / total) * 100);
+export function TestReviewScreen({ questions, score, total, onClose, onAskAawax }: TestReviewScreenProps) {
+  const percentage = total ? Math.round((score / total) * 100) : 0;
 
   const getBorderColor = (correct?: boolean) => {
     if (correct === true) return "border-green-500/40";
     if (correct === false) return "border-red-500/40";
     return "border-yellow-500/40";
   };
-
   const getBgColor = (correct?: boolean) => {
-    if (correct === true) return "bg-green-500/10";
-    if (correct === false) return "bg-red-500/10";
-    return "bg-yellow-500/10";
+    if (correct === true) return "bg-green-500/[0.07]";
+    if (correct === false) return "bg-red-500/[0.07]";
+    return "bg-yellow-500/[0.07]";
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-gradient-to-b from-[#06060b] via-[#0b0b12] to-[#11111a] overflow-y-auto">
+    <div className="fixed inset-0 z-[70] overflow-y-auto bg-[#06060b]">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-[#06060b]/80 backdrop-blur-sm border-b border-white/10">
-        <div className="max-w-3xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <motion.button
-              whileTap={{ opacity: 0.6 }}
-              onClick={onClose}
-              className="flex items-center gap-2 text-[#ddd6fe] hover:text-[#f2efff] transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              <span className="font-medium">Back</span>
-            </motion.button>
-            <div className="text-sm">
-              <span className="text-[#857ca2]">Score: </span>
-              <span className="text-[#f2efff] font-bold">
-                {score}/{total} ({percentage}%)
-              </span>
-            </div>
+      <div className="sticky top-0 z-10 border-b border-white/[0.06] bg-[#06060b]/85 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3.5">
+          <button
+            onClick={onClose}
+            className="flex items-center gap-2 text-white/70 transition-colors hover:text-white cursor-pointer"
+          >
+            <ArrowLeft className="h-5 w-5" />
+            <span className="font-medium">Back</span>
+          </button>
+          <div className="text-sm text-white/60">
+            <span className="font-bold" style={{ color: "var(--accent-soft)" }}>
+              {score}/{total}
+            </span>{" "}
+            ({percentage}%)
           </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className="max-w-3xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold text-[#f2efff] mb-6">Test Review</h1>
+      <div className="mx-auto max-w-2xl px-4 py-6">
+        <p className="text-[11px] font-bold uppercase tracking-[0.3em]" style={{ color: "var(--accent-soft)" }}>
+          Review
+        </p>
+        <h1 className="mb-6 mt-1 font-serif text-3xl text-white">Test review</h1>
 
-        <div className="space-y-4">
+        <div className="space-y-3.5">
           {questions.map((q, idx) => (
             <motion.div
               key={idx}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.05 }}
-              className={`bg-white/5 border-2 rounded-2xl p-5 ${getBorderColor(q.correct)} ${getBgColor(q.correct)}`}
+              transition={{ delay: idx * 0.04 }}
+              className={`rounded-2xl border p-5 ${getBorderColor(q.correct)} ${getBgColor(q.correct)}`}
             >
-              {/* Question Number & Status */}
-              <div className="flex items-start justify-between mb-3">
-                <span className="text-xs text-[#857ca2] uppercase tracking-wide">
-                  Question {idx + 1}
-                </span>
-                {q.correct === true && <CheckCircle className="w-5 h-5 text-green-400" />}
-                {q.correct === false && <XCircle className="w-5 h-5 text-red-400" />}
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-xs uppercase tracking-wider text-white/45">Question {idx + 1}</span>
+                {q.correct === true && <CheckCircle className="h-5 w-5 text-green-400" />}
+                {q.correct === false && <XCircle className="h-5 w-5 text-red-400" />}
               </div>
 
-              {/* Question Text */}
-              <h3 className="text-base font-medium text-[#f2efff] mb-4 leading-relaxed">
+              <h3 className="mb-4 text-base font-medium leading-relaxed text-white">
                 {q.question || q.statement}
               </h3>
 
-              {/* User Answer */}
               {q.userAnswer && (
-                <div className="mb-3 p-3 bg-white/5 rounded-lg border border-white/10">
-                  <div className="text-xs text-[#857ca2] mb-1">Your answer:</div>
-                  <div className="text-sm text-[#a59dbd]">{q.userAnswer}</div>
+                <div className="mb-2.5 rounded-xl border border-white/10 bg-white/[0.04] p-3">
+                  <div className="mb-1 text-xs text-white/45">Your answer</div>
+                  <div className="text-sm text-white/75">{q.userAnswer}</div>
                 </div>
               )}
 
-              {/* Correct Answer */}
-              <div className="p-3 bg-green-500/10 rounded-lg border border-green-500/30">
-                <div className="text-xs text-green-400 mb-1">Correct answer:</div>
+              <div className="rounded-xl border border-green-500/30 bg-green-500/[0.08] p-3">
+                <div className="mb-1 text-xs text-green-400">Correct answer</div>
                 <div className="text-sm text-green-300">{q.answer}</div>
               </div>
 
-              {/* Explanation */}
               {q.explanation && (
-                <div className="mt-3 p-3 bg-[#a78bfa]/10 rounded-lg border border-[#a78bfa]/30">
-                  <div className="text-xs text-[#a78bfa] mb-1">Explanation:</div>
-                  <div className="text-sm text-[#ddd6fe] leading-relaxed">{q.explanation}</div>
+                <div
+                  className="mt-2.5 rounded-xl border p-3"
+                  style={{ borderColor: "rgba(var(--accent-glow),0.3)", background: "rgba(var(--accent-glow),0.08)" }}
+                >
+                  <div className="mb-1 text-xs" style={{ color: "var(--accent-soft)" }}>
+                    Explanation
+                  </div>
+                  <div className="text-sm leading-relaxed text-white/80">{q.explanation}</div>
                 </div>
+              )}
+
+              {/* Ask Aawax on wrong answers */}
+              {q.correct === false && onAskAawax && (
+                <button
+                  onClick={() => onAskAawax(`${q.question || q.statement}`)}
+                  className="mt-3.5 flex w-full items-center justify-center gap-2 rounded-full border py-2.5 text-sm font-semibold transition-colors cursor-pointer"
+                  style={{
+                    borderColor: "rgba(var(--accent-glow),0.4)",
+                    background: "rgba(var(--accent-glow),0.12)",
+                    color: "var(--accent-soft)",
+                  }}
+                >
+                  <Sparkles className="h-4 w-4" /> Ask Aawax
+                </button>
               )}
             </motion.div>
           ))}

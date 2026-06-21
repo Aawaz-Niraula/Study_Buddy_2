@@ -30,7 +30,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Study Buddy — AI Study Questions",
+  title: "Study Buddy: AI Study Questions",
   description: "Turn your notes into smart study questions with AI. Generate quizzes, flashcards, and tests from text, PDFs, or photos.",
 };
 

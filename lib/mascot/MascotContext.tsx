@@ -38,6 +38,10 @@ type MascotContextValue = {
   soundOn: boolean;
   /** Dress-Up Room open state */
   dressUpOpen: boolean;
+  /** Chat with Aawax open state */
+  chatOpen: boolean;
+  /** a message to auto-send when the chat opens (e.g. from "Ask Aawax") */
+  chatSeed: string | null;
   setDesign: (d: MascotDesign) => void;
   setColor: (c: MascotColor) => void;
   setMood: (m: MascotMood) => void;
@@ -45,6 +49,9 @@ type MascotContextValue = {
   surpriseMe: () => void;
   openDressUp: () => void;
   closeDressUp: () => void;
+  openChat: (seed?: string) => void;
+  closeChat: () => void;
+  consumeChatSeed: () => void;
   playBoop: () => void;
 };
 
@@ -69,6 +76,8 @@ export function MascotProvider({ children }: { children: ReactNode }) {
   const [soundOn, setSoundOn] = useState<boolean>(DEFAULT_PREFS.soundOn);
   const [mood, setMood] = useState<MascotMood>("idle");
   const [dressUpOpen, setDressUpOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatSeed, setChatSeed] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
   // Load persisted prefs once on mount ("Aawax remembers").
@@ -145,6 +154,13 @@ export function MascotProvider({ children }: { children: ReactNode }) {
   const openDressUp = useCallback(() => setDressUpOpen(true), []);
   const closeDressUp = useCallback(() => setDressUpOpen(false), []);
 
+  const openChat = useCallback((seed?: string) => {
+    if (seed) setChatSeed(seed);
+    setChatOpen(true);
+  }, []);
+  const closeChat = useCallback(() => setChatOpen(false), []);
+  const consumeChatSeed = useCallback(() => setChatSeed(null), []);
+
   return (
     <MascotContext.Provider
       value={{
@@ -153,6 +169,8 @@ export function MascotProvider({ children }: { children: ReactNode }) {
         mood,
         soundOn,
         dressUpOpen,
+        chatOpen,
+        chatSeed,
         setDesign,
         setColor,
         setMood,
@@ -160,6 +178,9 @@ export function MascotProvider({ children }: { children: ReactNode }) {
         surpriseMe,
         openDressUp,
         closeDressUp,
+        openChat,
+        closeChat,
+        consumeChatSeed,
         playBoop,
       }}
     >

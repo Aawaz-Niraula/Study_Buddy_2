@@ -123,7 +123,7 @@ export function Aawax({
         {/* Floating sparkles / starfield */}
         {sparkles && <Sparkles reduce={!!reduce} accent={theme.accent} />}
 
-        {/* The mascot rig — tilts per mood */}
+        {/* The mascot rig - tilts per mood */}
         <g transform={`rotate(${pose.tilt} 100 116)`}>
           {/* Feet (one a signature different shade) */}
           <ellipse cx="80" cy="168" rx="15" ry="9.5" fill={theme.footAlt} />
@@ -142,7 +142,7 @@ export function Aawax({
             </>
           )}
 
-          {/* Body — wider than tall blob */}
+          {/* Body - wider than tall blob */}
           <ellipse cx="100" cy="116" rx="60" ry="52" fill={`url(#body-${uid})`} />
 
           {/* Antenna + glowing orb */}

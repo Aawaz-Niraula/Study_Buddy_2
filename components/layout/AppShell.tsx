@@ -6,6 +6,7 @@ import { AppHeader } from "./AppHeader";
 import { BottomTabBar } from "./BottomTabBar";
 import { FloatingMascot } from "./FloatingMascot";
 import { DressUpRoom } from "@/components/mascot/DressUpRoom";
+import { ChatWithAawax } from "@/components/mascot/ChatWithAawax";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -44,6 +45,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <FloatingMascot />
       <BottomTabBar />
       <DressUpRoom />
+      <ChatWithAawax />
     </div>
   );
 }

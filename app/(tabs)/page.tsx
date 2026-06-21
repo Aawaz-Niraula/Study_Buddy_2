@@ -575,7 +575,7 @@ export default function GeneratePage() {
       <PageTitle
         eyebrow="Generate"
         title="Turn notes into questions"
-        subtitle="Paste notes, or upload a PDF, document, or photos — Aawax turns them into smart study questions."
+        subtitle="Paste notes, or upload a PDF, document, or photos. Aawax turns them into smart study questions."
       />
 
       {!user && (

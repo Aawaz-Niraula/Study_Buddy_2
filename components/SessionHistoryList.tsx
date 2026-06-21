@@ -174,7 +174,7 @@ export function SessionHistoryList({
                     className="flex-1 min-w-0 rounded-2xl border border-white/10 bg-gradient-to-r from-white/[0.06] to-white/[0.03] px-3 py-0 text-left transition-all hover:border-white/20 hover:bg-white/8 hover:shadow-[0_14px_28px_rgba(9,9,16,0.22)] flex items-center"
                   >
                     <div className="flex items-center gap-3 min-w-0 w-full">
-                      {/* Icon badge — fixed size, never shrinks */}
+                      {/* Icon badge - fixed size, never shrinks */}
                       <div className="shrink-0 rounded-xl bg-[#a78bfa]/10 p-2">
                         <Icon className="h-4 w-4 text-[#a78bfa]" />
                       </div>
@@ -197,7 +197,7 @@ export function SessionHistoryList({
                     </div>
                   </motion.button>
 
-                  {/* Delete button — fixed width, always visible */}
+                  {/* Delete button - fixed width, always visible */}
                   {onDeleteSession && (
                     <button
                       type="button"

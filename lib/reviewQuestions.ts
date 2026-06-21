@@ -62,3 +62,28 @@ export function buildReviewRows(
   });
   return rows;
 }
+
+export type WrongCounts = { mcq: number; tf: number; sa: number };
+
+/** Count wrong answers by type for a single graded submission. */
+export function countWrongByType(
+  questionSet: QuestionSet | null | undefined,
+  answers: Answers = {},
+  shortAnswerEvaluations?: Evals
+): WrongCounts {
+  const counts: WrongCounts = { mcq: 0, tf: 0, sa: 0 };
+  if (!questionSet) return counts;
+  questionSet.multiple_choice?.forEach((q, i) => {
+    const expected = String(q.answer ?? "").trim().toUpperCase().match(/[A-D]/)?.[0] || "";
+    if ((answers[`mcq-${i}`] ?? "") !== expected) counts.mcq += 1;
+  });
+  questionSet.true_false?.forEach((q, i) => {
+    const expected = typeof q.answer === "boolean" ? (q.answer ? "True" : "False") : String(q.answer);
+    if ((answers[`tf-${i}`] ?? "") !== expected) counts.tf += 1;
+  });
+  questionSet.short_answer?.forEach((_q, i) => {
+    const evaluation = shortAnswerEvaluations?.find((e) => e.index === i);
+    if (evaluation && evaluation.correct === false) counts.sa += 1;
+  });
+  return counts;
+}

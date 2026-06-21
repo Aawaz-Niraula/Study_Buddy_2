@@ -49,7 +49,7 @@ function ErrorFallback({ onReset }: { onReset: () => void }) {
           Something went wrong
         </h1>
         <p className="text-[#857ca2] text-sm mb-8 leading-relaxed">
-          An unexpected error occurred. Don&apos;t worry — your data is safe.
+          An unexpected error occurred. Don&apos;t worry, your data is safe.
           Try reloading the page.
         </p>
         <motion.button
