@@ -55,6 +55,61 @@ type SourcePayload =
 
 let schemaReadyPromise: Promise<unknown> | undefined;
 
+// ─── Rate limiting & concurrency ───────────────────────────────
+const GUEST_USE_LIMIT = 3; // total AI uses allowed without an account
+const ACCOUNT_RATE_LIMIT = 40; // AI requests per window per account
+const ACCOUNT_RATE_WINDOW_MS = 60_000;
+const MAX_CONCURRENT_AI = 50; // provider can handle this many at once
+
+// Actions that hit the AI provider (gated by concurrency + counted for guests).
+const HEAVY_ACTIONS = new Set(["generate", "generate_test", "grade_short_answers", "chat"]);
+// Actions counted against a guest's free-use budget.
+const GUEST_COUNTED_ACTIONS = new Set(["generate", "generate_test", "chat"]);
+
+// In-memory concurrency counter (per serverless instance).
+let inFlightAI = 0;
+
+// In-memory fixed-window rate limiter (per serverless instance).
+const accountHits = new Map<string, { count: number; resetAt: number }>();
+
+function checkAccountRate(userId: string): boolean {
+  const now = Date.now();
+  const rec = accountHits.get(userId);
+  if (!rec || now > rec.resetAt) {
+    accountHits.set(userId, { count: 1, resetAt: now + ACCOUNT_RATE_WINDOW_MS });
+    return true;
+  }
+  if (rec.count >= ACCOUNT_RATE_LIMIT) return false;
+  rec.count += 1;
+  return true;
+}
+
+function getClientIp(request: Request): string {
+  const xff = request.headers.get("x-forwarded-for");
+  if (xff) return xff.split(",")[0].trim();
+  return request.headers.get("x-real-ip")?.trim() || "unknown";
+}
+
+async function getGuestUsage(ip: string): Promise<number> {
+  const db = getDbClient();
+  if (!db) return 0;
+  await ensureSchema(db);
+  const r = await db.execute({ sql: `SELECT count FROM guest_usage WHERE ip = ? LIMIT 1`, args: [ip] });
+  return r.rows[0] ? Number(r.rows[0].count) : 0;
+}
+
+async function incrGuestUsage(ip: string): Promise<void> {
+  const db = getDbClient();
+  if (!db) return;
+  await ensureSchema(db);
+  const now = new Date().toISOString();
+  await db.execute({
+    sql: `INSERT INTO guest_usage (ip, count, updated_at) VALUES (?, 1, ?)
+          ON CONFLICT(ip) DO UPDATE SET count = count + 1, updated_at = ?`,
+    args: [ip, now, now],
+  });
+}
+
 // ─── Helpers ───────────────────────────────────────────────────
 function makeResponse(status: number, body: unknown) {
   return Response.json(body, {
@@ -218,6 +273,11 @@ async function ensureSchema(db: ReturnType<typeof createClient> | null) {
         /* duplicate column */
       }
       await db.execute(`CREATE INDEX IF NOT EXISTS idx_app_sessions_user_id ON app_sessions(user_id)`);
+      await db.execute(`CREATE TABLE IF NOT EXISTS guest_usage (
+        ip TEXT PRIMARY KEY,
+        count INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL
+      )`);
     })().catch((err) => {
       schemaReadyPromise = undefined;
       throw err;
@@ -776,7 +836,10 @@ export async function GET(request: Request) {
     }
     return makeResponse(200, { sessions: await listSessions(userId) });
   } catch (error) {
-    return makeResponse(500, { detail: error instanceof Error ? error.message : "Server error" });
+    return makeResponse(500, {
+      detail: error instanceof Error ? error.message : "Server error",
+      stack: error instanceof Error ? error.stack : undefined,
+    });
   }
 }
 
@@ -791,15 +854,16 @@ export async function DELETE(request: Request) {
     await deleteSession(sessionId, userId);
     return makeResponse(200, { ok: true });
   } catch (error) {
-    return makeResponse(500, { detail: error instanceof Error ? error.message : "Server error" });
+    return makeResponse(500, {
+      detail: error instanceof Error ? error.message : "Server error",
+      stack: error instanceof Error ? error.stack : undefined,
+    });
   }
 }
 
 export async function POST(request: Request) {
+  let heldConcurrencySlot = false;
   try {
-    const userId = await getAuthenticatedUserId();
-    if (!userId) return makeResponse(401, { detail: "Sign in to use Study Buddy." });
-
     const body = await request.json().catch(() => null);
     if (!body) return makeResponse(400, { detail: "Invalid JSON body" });
 
@@ -810,9 +874,43 @@ export async function POST(request: Request) {
     const attachments = Array.isArray((body as { attachments?: AttachmentPayload[] }).attachments) ? (body as { attachments: AttachmentPayload[] }).attachments : [];
     const sessionId = (body as { sessionId?: string }).sessionId ? String((body as { sessionId?: string }).sessionId) : null;
 
+    const userId = await getAuthenticatedUserId();
+    const ip = getClientIp(request);
+    const isGuest = !userId;
+    // Guests are tracked (and persisted) under a synthetic identity keyed by IP.
+    const identity = userId ?? `guest:${ip}`;
+
+    // 1) Concurrency cap: reject extra load instead of crashing under it.
+    if (HEAVY_ACTIONS.has(action)) {
+      if (inFlightAI >= MAX_CONCURRENT_AI) {
+        return makeResponse(429, {
+          detail: "Study Buddy is handling a lot of requests right now. Please try again in a few seconds.",
+        });
+      }
+      inFlightAI += 1;
+      heldConcurrencySlot = true;
+    }
+
+    // 2) Per-account rate limit.
+    if (userId && HEAVY_ACTIONS.has(action) && !checkAccountRate(userId)) {
+      return makeResponse(429, {
+        detail: `You're going a bit fast (limit ${ACCOUNT_RATE_LIMIT} requests per minute). Please wait a moment.`,
+      });
+    }
+
+    // 3) Guest free-use cap (3 total without an account).
+    if (isGuest && GUEST_COUNTED_ACTIONS.has(action)) {
+      const used = await getGuestUsage(ip);
+      if (used >= GUEST_USE_LIMIT) {
+        return makeResponse(429, {
+          detail: `You've used all ${GUEST_USE_LIMIT} free guest tries. Sign in to keep generating questions and tests.`,
+        });
+      }
+    }
+
     if (action === "generate_test") {
       if (!sessionId) return makeResponse(422, { detail: "sessionId is required for tests." });
-      const session = await getSessionById(sessionId, userId);
+      const session = await getSessionById(sessionId, identity);
       if (!session) return makeResponse(404, { detail: "Session not found" });
       if (!process.env.DEEPINFRA_API_KEY) {
         return makeResponse(500, { detail: "DEEPINFRA_API_KEY not configured" });
@@ -821,8 +919,9 @@ export async function POST(request: Request) {
         apiKey: process.env.DEEPINFRA_API_KEY,
         session,
         includePrevious: Boolean((body as { includePrevious?: boolean }).includePrevious),
-        userId,
+        userId: identity,
       });
+      if (isGuest) await incrGuestUsage(ip);
       return makeResponse(200, { questions: testQuestions });
     }
 
@@ -841,10 +940,11 @@ export async function POST(request: Request) {
         : [];
       const reply = await chatWithAawax({
         apiKey: process.env.DEEPINFRA_API_KEY,
-        userId,
+        userId: identity,
         messages,
         images,
       });
+      if (isGuest) await incrGuestUsage(ip);
       return makeResponse(200, { reply });
     }
 
@@ -852,7 +952,7 @@ export async function POST(request: Request) {
       if (!sessionId) return makeResponse(422, { detail: "sessionId is required for test submission." });
       const submission = (body as { submission?: Record<string, unknown> }).submission;
       if (!submission) return makeResponse(422, { detail: "submission is required." });
-      await saveTestSubmission({ userId, sessionId, submission });
+      await saveTestSubmission({ userId: identity, sessionId, submission });
       return makeResponse(200, { ok: true });
     }
 
@@ -874,13 +974,17 @@ export async function POST(request: Request) {
     let sourcePayload: SourcePayload;
 
     if (sessionId) {
-      const existing = await getSessionById(sessionId, userId);
+      const existing = await getSessionById(sessionId, identity);
       if (!existing) return makeResponse(404, { detail: "Session not found" });
       sourceKind = existing.source_kind;
       sourcePayload = existing.source_payload as SourcePayload;
     } else {
       sourceKind = detectSourceKind(text, attachments);
       if (!sourceKind) return makeResponse(422, { detail: "Please add notes, a PDF, a DOCX, or one or more photos." });
+      // Guests can only use the text path (file uploads require an account).
+      if (isGuest && sourceKind !== "text") {
+        return makeResponse(401, { detail: "Sign in to generate from PDFs, documents, or photos. Pasted notes work without an account." });
+      }
       const imageCount = attachments.filter((a) => a?.type === "image").length;
       if (sourceKind === "image" && imageCount > 4) {
         return makeResponse(422, { detail: "Maximum 4 images per request." });
@@ -915,9 +1019,16 @@ export async function POST(request: Request) {
       difficulty,
     });
 
-    const saved = await saveGeneration({ userId, sessionId, sourceKind, sourcePayload, mode, difficulty, modelUsed, questions });
+    const saved = await saveGeneration({ userId: identity, sessionId, sourceKind, sourcePayload, mode, difficulty, modelUsed, questions });
+    if (isGuest) await incrGuestUsage(ip);
     return makeResponse(200, { questions, sessionId: saved.sessionId, sourceKind, latestMode: mode, latestDifficulty: difficulty });
   } catch (error) {
-    return makeResponse(500, { detail: error instanceof Error ? error.message : "Server error" });
+    // Surface the raw error while edge testing so bugs are easy to track down.
+    return makeResponse(500, {
+      detail: error instanceof Error ? error.message : "Server error",
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+  } finally {
+    if (heldConcurrencySlot) inFlightAI -= 1;
   }
 }

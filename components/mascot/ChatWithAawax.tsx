@@ -67,16 +67,9 @@ export function ChatWithAawax() {
       setMessages((prev) => [...prev, { role: "assistant", content: String(data.reply ?? "") }]);
       playBoop();
     } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content:
-            err instanceof Error && err.message.includes("Sign in")
-              ? "Please sign in first so I can see your study history."
-              : "Sorry, I had trouble replying just now. Please try again in a moment.",
-        },
-      ]);
+      // Surface the raw error while edge testing so issues are easy to track down.
+      const raw = err instanceof Error ? err.message : "Unknown error";
+      setMessages((prev) => [...prev, { role: "assistant", content: `[error] ${raw}` }]);
     } finally {
       setSending(false);
       scrollToBottom();

@@ -303,9 +303,9 @@ export default function GeneratePage() {
       setError("Add notes, one PDF, or one or more photos first.");
       return;
     }
-    if (!user) {
-      setError("Please sign in to generate questions.");
-      toast.error("Please sign in to generate questions.");
+    if (!user && sourceKind !== "text") {
+      setError("Sign in to generate from files. Pasted notes work without an account.");
+      toast.error("Sign in to generate from files.");
       return;
     }
     setLoading(true);
@@ -580,8 +580,9 @@ export default function GeneratePage() {
 
       {!user && (
         <div className="mb-5 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-center text-sm text-white/60">
-          <span style={{ color: "var(--accent-soft)" }}>Sign in</span> to generate questions and save your
-          progress.
+          You have <span style={{ color: "var(--accent-soft)" }}>3 free guest tries</span> using pasted notes.{" "}
+          <span style={{ color: "var(--accent-soft)" }}>Sign in</span> for files, photos, saved history, and
+          unlimited use.
         </div>
       )}
 
