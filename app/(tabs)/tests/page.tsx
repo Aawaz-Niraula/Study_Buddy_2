@@ -7,6 +7,7 @@ import { PencilLine, ChevronRight } from "lucide-react";
 import { PageTitle } from "@/components/layout/PageTitle";
 import { TestHistoryList } from "@/components/TestHistoryList";
 import { TestReviewScreen } from "@/components/TestReviewScreen";
+import { Portal } from "@/components/Portal";
 import { Aawax } from "@/components/mascot/Aawax";
 import { useMascot } from "@/lib/mascot/MascotContext";
 import { useStudyData, type StudyTest } from "@/lib/useStudyData";
@@ -20,17 +21,19 @@ export default function TestsPage() {
 
   if (reviewing) {
     return (
-      <TestReviewScreen
-        questions={buildReviewRows(
-          reviewing.questions as Parameters<typeof buildReviewRows>[0],
-          reviewing.answers,
-          reviewing.shortAnswerEvaluations
-        )}
-        score={reviewing.score}
-        total={reviewing.total}
-        onClose={() => setReviewing(null)}
-        onAskAawax={(question) => openChat(`I got this question wrong:\n\n"${question}"\n\nElaborate, Aawax.`)}
-      />
+      <Portal>
+        <TestReviewScreen
+          questions={buildReviewRows(
+            reviewing.questions as Parameters<typeof buildReviewRows>[0],
+            reviewing.answers,
+            reviewing.shortAnswerEvaluations
+          )}
+          score={reviewing.score}
+          total={reviewing.total}
+          onClose={() => setReviewing(null)}
+          onAskAawax={(question) => openChat(`I got this question wrong:\n\n"${question}"\n\nElaborate, Aawax.`)}
+        />
+      </Portal>
     );
   }
 

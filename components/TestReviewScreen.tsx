@@ -36,7 +36,7 @@ export function TestReviewScreen({ questions, score, total, onClose, onAskAawax 
   };
 
   return (
-    <div className="fixed inset-0 z-[70] overflow-y-auto bg-[#06060b]">
+    <div className="fixed inset-0 z-[80] overflow-y-auto bg-[#06060b]">
       {/* Header */}
       <div className="sticky top-0 z-10 border-b border-white/[0.06] bg-[#06060b]/85 backdrop-blur-xl">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3.5">

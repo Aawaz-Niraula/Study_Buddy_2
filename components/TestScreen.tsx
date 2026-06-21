@@ -1,9 +1,11 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { ChevronRight, ChevronLeft, X, Clock, Loader2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ChevronRight, ChevronLeft, X, Clock, Loader2, Check } from "lucide-react";
 import { BottomSheet } from "./BottomSheet";
 import { useState, useEffect, useRef } from "react";
+import { Aawax } from "./mascot/Aawax";
+import { useMascot } from "@/lib/mascot/MascotContext";
 
 interface Question {
   question?: string;
@@ -27,6 +29,12 @@ interface TestScreenProps {
   timerMinutes?: number | null;
 }
 
+const TYPE_LABEL: Record<TestScreenProps["questionType"], string> = {
+  mcq: "Multiple choice",
+  tf: "True or false",
+  sa: "Short answer",
+};
+
 export function TestScreen({
   questions,
   questionType,
@@ -41,44 +49,35 @@ export function TestScreen({
   onSubmit,
   timerMinutes,
 }: TestScreenProps) {
+  const { design, color } = useMascot();
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [timeLeft, setTimeLeft] = useState<number | null>(
-    timerMinutes ? timerMinutes * 60 : null
-  );
+  const [timeLeft, setTimeLeft] = useState<number | null>(timerMinutes ? timerMinutes * 60 : null);
   const [timeIsUp, setTimeIsUp] = useState(false);
-  
+
   const onSubmitRef = useRef(onSubmit);
   onSubmitRef.current = onSubmit;
 
   const question = questions[currentIndex];
   const progress = ((currentIndex + 1) / totalQuestions) * 100;
+  const answered = answer !== undefined && answer !== "";
 
-  // Timer logic
   useEffect(() => {
     if (timeLeft === null) return;
-
     if (timeLeft <= 0) {
       setTimeIsUp(true);
-      const timeout = setTimeout(() => {
-        onSubmitRef.current();
-      }, 1500);
+      const timeout = setTimeout(() => onSubmitRef.current(), 1500);
       return () => clearTimeout(timeout);
     }
-
     const interval = setInterval(() => {
       setTimeLeft((prev) => (prev !== null ? prev - 1 : null));
     }, 1000);
-
     return () => clearInterval(interval);
   }, [timeLeft]);
 
   const getTimerColor = () => {
     if (timeLeft === null || !timerMinutes) return "text-green-400";
-    
-    const totalSeconds = timerMinutes * 60;
-    const percentRemaining = (timeLeft / totalSeconds) * 100;
-
+    const percentRemaining = (timeLeft / (timerMinutes * 60)) * 100;
     if (timeLeft <= 10) return "text-red-400";
     if (percentRemaining < 50) return "text-yellow-400";
     return "text-green-400";
@@ -90,13 +89,9 @@ export function TestScreen({
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const handleExit = () => {
-    setShowExitConfirm(true);
-  };
-
-  const confirmExit = () => {
-    setShowExitConfirm(false);
-    onExit();
+  const handleAnswer = (value: string) => {
+    if (submitting) return;
+    onAnswer(value);
   };
 
   const handleSubmit = async () => {
@@ -109,206 +104,214 @@ export function TestScreen({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#06060b] via-[#0b0b12] to-[#11111a] text-[#f2efff] pb-24">
+    <div className="fixed inset-0 z-[80] flex flex-col bg-[#06060b] text-white">
+      {/* Ambient glow */}
+      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+        <div
+          className="absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full blur-3xl"
+          style={{ background: "rgba(var(--accent-glow), 0.12)" }}
+        />
+      </div>
+
       {/* Header */}
-      <div className="fixed top-0 left-0 right-0 z-30 bg-[#06060b]/80 backdrop-blur-sm border-b border-white/10">
-        <div className="max-w-3xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-xs text-[#857ca2] uppercase tracking-wider">
-              Test Mode
+      <div className="border-b border-white/[0.06] bg-[#06060b]/85 backdrop-blur-xl">
+        <div className="mx-auto w-full max-w-2xl px-4 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <span
+                className="flex h-9 w-9 items-center justify-center rounded-full"
+                style={{ background: "rgba(var(--accent-glow), 0.12)" }}
+              >
+                <Aawax design={design} color={color} mood={answered ? "cheer" : "think"} size={30} float={false} />
+              </span>
+              <div className="leading-tight">
+                <p className="text-sm font-semibold text-white">Question {currentIndex + 1}</p>
+                <p className="text-[11px] uppercase tracking-wider text-white/40">of {totalQuestions}</p>
+              </div>
             </div>
-            <div className="flex items-center gap-3">
-              {/* Timer Display */}
+            <div className="flex items-center gap-2.5">
               {timeLeft !== null && (
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border ${
+                <div
+                  className={`flex items-center gap-1.5 rounded-full border bg-white/5 px-3 py-1.5 ${
                     timeLeft <= 10 ? "border-red-500/50" : "border-white/10"
                   }`}
                 >
-                  <Clock className={`w-4 h-4 ${getTimerColor()}`} />
-                  <span className={`text-sm font-mono font-bold ${getTimerColor()}`}>
-                    {timeIsUp ? "Time is up!" : formatTime(timeLeft)}
+                  <Clock className={`h-3.5 w-3.5 ${getTimerColor()}`} />
+                  <span className={`font-mono text-sm font-bold ${getTimerColor()}`}>
+                    {timeIsUp ? "Time up" : formatTime(timeLeft)}
                   </span>
-                </motion.div>
+                </div>
               )}
-              
-              <motion.button
-                whileTap={{ scale: 0.9, opacity: 0.6 }}
-                onClick={handleExit}
+              <button
+                onClick={() => setShowExitConfirm(true)}
                 disabled={submitting}
-                className="p-2 rounded-full hover:bg-white/5 active:bg-white/10 transition-colors disabled:opacity-40"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-white/60 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40 cursor-pointer"
                 aria-label="Exit test"
               >
-                <X className="w-5 h-5 text-[#f87171]" />
-              </motion.button>
+                <X className="h-5 w-5" />
+              </button>
             </div>
           </div>
 
           {/* Progress */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-[#ddd6fe] font-medium">
-                Q{currentIndex + 1} of {totalQuestions}
-              </span>
-              <span className="text-[#857ca2]">{Math.round(progress)}%</span>
-            </div>
-            <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${progress}%` }}
-                transition={{ duration: 0.3 }}
-                className="h-full bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4]"
-              />
-            </div>
+          <div className="h-2 overflow-hidden rounded-full bg-white/[0.08]">
+            <motion.div
+              className="h-full rounded-full"
+              style={{ background: "linear-gradient(90deg, var(--accent-soft), var(--accent))" }}
+              initial={{ width: 0 }}
+              animate={{ width: `${progress}%` }}
+              transition={{ duration: 0.35, ease: "easeOut" }}
+            />
           </div>
         </div>
       </div>
 
-      {/* Question Content */}
-      <div className="pt-28 sm:pt-32 px-3 sm:px-4 pb-8 max-w-3xl mx-auto">
-        <motion.div
-          key={currentIndex}
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.3 }}
-          className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6"
-        >
-          {/* Question Text */}
-          <h2 className="text-xl leading-relaxed mb-6 text-[#f2efff]">
-            {question?.question || question?.statement}
-          </h2>
+      {/* Question */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-2xl px-4 py-6">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentIndex}
+              initial={{ opacity: 0, x: 24 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -24 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+            >
+              <span
+                className="text-[11px] font-bold uppercase tracking-[0.22em]"
+                style={{ color: "var(--accent-soft)" }}
+              >
+                {TYPE_LABEL[questionType]}
+              </span>
+              <h2 className="mb-6 mt-2 font-serif text-2xl leading-snug text-white">
+                {question?.question || question?.statement}
+              </h2>
 
-          {/* Answer Input */}
-          {questionType === "mcq" && (
-            <div className="space-y-3">
-              {question?.options?.map((option, idx) => {
-                const letter = option.trim().charAt(0).toUpperCase();
-                const isSelected = answer === letter;
+              {questionType === "mcq" && (
+                <div className="space-y-2.5">
+                  {question?.options?.map((option, idx) => {
+                    const letter = option.trim().charAt(0).toUpperCase();
+                    const isSelected = answer === letter;
+                    return (
+                      <motion.button
+                        key={idx}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => handleAnswer(letter)}
+                        disabled={submitting}
+                        className="flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition-colors disabled:cursor-not-allowed cursor-pointer"
+                        style={{
+                          borderColor: isSelected ? "var(--accent)" : "rgba(255,255,255,0.1)",
+                          background: isSelected ? "rgba(var(--accent-glow), 0.14)" : "rgba(255,255,255,0.03)",
+                        }}
+                      >
+                        <span
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+                          style={{
+                            background: isSelected
+                              ? "linear-gradient(135deg, var(--accent-soft), var(--accent))"
+                              : "rgba(255,255,255,0.06)",
+                            color: isSelected ? "#0a0a12" : "rgba(255,255,255,0.6)",
+                          }}
+                        >
+                          {isSelected ? <Check className="h-4 w-4" strokeWidth={3} /> : letter}
+                        </span>
+                        <span className="text-sm text-white/90">{option}</span>
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              )}
 
-                return (
-                  <motion.button
-                    key={idx}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => !submitting && onAnswer(letter)}
-                    disabled={submitting}
-                    className={`w-full text-left p-4 rounded-xl transition-all disabled:cursor-not-allowed ${
-                      isSelected
-                        ? "bg-[#a78bfa]/20 border-[#a78bfa]/50 border-2"
-                        : "bg-white/5 border border-white/10 hover:bg-white/8 active:bg-white/12"
-                    }`}
-                  >
-                    <div className="text-[#f2efff]">{option}</div>
-                  </motion.button>
-                );
-              })}
-            </div>
-          )}
+              {questionType === "tf" && (
+                <div className="grid grid-cols-2 gap-3">
+                  {["True", "False"].map((option) => {
+                    const isSelected = answer === option;
+                    return (
+                      <motion.button
+                        key={option}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={() => handleAnswer(option)}
+                        disabled={submitting}
+                        className="min-h-[64px] rounded-2xl border text-base font-semibold transition-colors disabled:cursor-not-allowed cursor-pointer"
+                        style={{
+                          borderColor: isSelected ? "transparent" : "rgba(255,255,255,0.1)",
+                          background: isSelected
+                            ? "linear-gradient(135deg, var(--accent-soft), var(--accent))"
+                            : "rgba(255,255,255,0.03)",
+                          color: isSelected ? "#0a0a12" : "rgba(255,255,255,0.8)",
+                        }}
+                      >
+                        {option}
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              )}
 
-          {questionType === "tf" && (
-            <div className="flex gap-4">
-              {["True", "False"].map((option) => {
-                const isSelected = answer === option;
-
-                return (
-                  <motion.button
-                    key={option}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => !submitting && onAnswer(option)}
-                    disabled={submitting}
-                    className={`flex-1 min-h-[56px] px-6 py-4 rounded-xl font-medium transition-all disabled:cursor-not-allowed ${
-                      isSelected
-                        ? "bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] text-white"
-                        : "bg-white/5 border border-white/10 text-[#ddd6fe] hover:bg-white/8 active:bg-white/12"
-                    }`}
-                  >
-                    {option}
-                  </motion.button>
-                );
-              })}
-            </div>
-          )}
-
-          {questionType === "sa" && (
-            <textarea
-              value={answer || ""}
-              onChange={(e) => onAnswer(e.target.value)}
-              placeholder="Type your answer here..."
-              disabled={submitting}
-              className="w-full min-h-[160px] bg-[#11111a] border-none rounded-xl px-4 py-3 text-[#f2efff] resize-none focus:outline-none focus:ring-2 focus:ring-[#a78bfa]/40 placeholder-[#857ca2] disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ fontFamily: "inherit", lineHeight: "1.7" }}
-            />
-          )}
-        </motion.div>
+              {questionType === "sa" && (
+                <textarea
+                  value={answer || ""}
+                  onChange={(e) => onAnswer(e.target.value)}
+                  placeholder="Type your answer here..."
+                  disabled={submitting}
+                  className="min-h-[170px] w-full resize-none rounded-2xl border border-white/[0.08] bg-black/30 px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 disabled:opacity-50"
+                  style={{ ["--tw-ring-color" as string]: "var(--accent)", lineHeight: "1.7" }}
+                />
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </div>
 
-      {/* Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-[#0b0b12] border-t border-white/10 p-3 sm:p-4">
-        <div className="max-w-3xl mx-auto flex items-center gap-2 sm:gap-3">
-          <motion.button
-            whileTap={{ scale: 0.95, opacity: 0.6 }}
+      {/* Bottom navigation */}
+      <div className="border-t border-white/[0.06] bg-[#0b0b12]/90 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+          <button
             onClick={onPrevious}
             disabled={currentIndex === 0 || submitting}
-            className={`flex-1 min-h-[48px] px-6 py-3 rounded-xl font-medium border transition-all ${
-              currentIndex === 0 || submitting
-                ? "border-white/10 text-[#857ca2] opacity-50 cursor-not-allowed"
-                : "border-white/20 text-[#ddd6fe] hover:bg-white/5 active:bg-white/10"
-            }`}
+            className="btn-outline flex-1 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <div className="flex items-center justify-center gap-2">
-              <ChevronLeft className="w-5 h-5" />
-              PREVIOUS
-            </div>
-          </motion.button>
-
+            <ChevronLeft className="h-5 w-5" /> Previous
+          </button>
           <motion.button
-            whileTap={{ scale: submitting ? 1 : 0.95, opacity: submitting ? 1 : 0.8 }}
+            whileTap={{ scale: submitting ? 1 : 0.97 }}
             onClick={isLastQuestion ? handleSubmit : onNext}
             disabled={submitting}
-            className="flex-1 min-h-[48px] px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-[#a78bfa] to-[#f9a8d4] text-white disabled:opacity-70 disabled:cursor-not-allowed"
+            className="btn-primary flex-1"
           >
-            <div className="flex items-center justify-center gap-2">
-              {submitting ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  SUBMITTING...
-                </>
-              ) : isLastQuestion ? (
-                "SUBMIT TEST"
-              ) : (
-                <>
-                  NEXT
-                  <ChevronRight className="w-5 h-5" />
-                </>
-              )}
-            </div>
+            {submitting ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" /> Submitting...
+              </>
+            ) : isLastQuestion ? (
+              "Submit test"
+            ) : (
+              <>
+                Next <ChevronRight className="h-5 w-5" />
+              </>
+            )}
           </motion.button>
         </div>
       </div>
 
-      {/* Exit Confirmation */}
+      {/* Exit confirmation */}
       <BottomSheet isOpen={showExitConfirm} onClose={() => setShowExitConfirm(false)}>
         <div className="py-4">
-          <h3 className="text-xl font-bold text-[#f2efff] mb-3">Exit Test?</h3>
-          <p className="text-[#857ca2] mb-6">
-            Are you sure you want to exit? Your progress will be lost.
-          </p>
+          <h3 className="mb-2 font-serif text-2xl text-white">Exit test?</h3>
+          <p className="mb-6 text-sm text-white/55">Your progress on this test will be lost.</p>
           <div className="flex gap-3">
-            <motion.button
-              whileTap={{ scale: 0.95, opacity: 0.6 }}
-              onClick={() => setShowExitConfirm(false)}
-              className="flex-1 min-h-[48px] px-6 py-3 rounded-xl border border-white/20 text-[#ddd6fe] font-medium hover:bg-white/5 active:bg-white/10"
-            >
+            <button onClick={() => setShowExitConfirm(false)} className="btn-outline flex-1">
               Cancel
-            </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.95, opacity: 0.6 }}
-              onClick={confirmExit}
-              className="flex-1 min-h-[48px] px-6 py-3 rounded-xl bg-[#f87171] text-white font-bold active:bg-[#dc2626]"
+            </button>
+            <button
+              onClick={() => {
+                setShowExitConfirm(false);
+                onExit();
+              }}
+              className="flex-1 rounded-full bg-red-500 py-3 font-bold text-white transition-colors hover:bg-red-600 cursor-pointer"
             >
               Exit
-            </motion.button>
+            </button>
           </div>
         </div>
       </BottomSheet>

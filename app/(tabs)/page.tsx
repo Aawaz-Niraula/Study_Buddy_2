@@ -12,6 +12,7 @@ import { ResultsScreen } from "@/components/ResultsScreen";
 import { TestOptionsSheet } from "@/components/TestOptionsSheet";
 import { BottomSheet } from "@/components/BottomSheet";
 import { PageTitle } from "@/components/layout/PageTitle";
+import { Portal } from "@/components/Portal";
 import { Aawax } from "@/components/mascot/Aawax";
 import { useAuth } from "@/lib/useAuth";
 import { useMascot } from "@/lib/mascot/MascotContext";
@@ -76,7 +77,7 @@ const getErrorMessage = (err: unknown, fallback: string) =>
 
 export default function GeneratePage() {
   const { user } = useAuth();
-  const { setMood, color, design } = useMascot();
+  const { setMood, color, design, openChat, playBoop } = useMascot();
 
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionTitle, setSessionTitle] = useState("New session");
@@ -525,26 +526,29 @@ export default function GeneratePage() {
   // ── Full-screen flows ──────────────────────────────────────────
   if (showResults && testScore) {
     return (
-      <div className="fixed inset-0 z-[70] overflow-y-auto bg-[#06060b]">
-        <ResultsScreen
-          score={testScore.score}
-          total={testScore.total}
-          questions={buildReviewQuestions(testQuestions, testAnswers, activeShortEvals)}
-          onRetakeTest={() => {
-            setShowResults(false);
-            setTestAnswers({});
-            setCurrentQuestionIndex(0);
-            setTestMode(true);
-          }}
-          onNewSession={resetSession}
-        />
-      </div>
+      <Portal>
+        <div className="fixed inset-0 z-[80] overflow-y-auto bg-[#06060b]">
+          <ResultsScreen
+            score={testScore.score}
+            total={testScore.total}
+            questions={buildReviewQuestions(testQuestions, testAnswers, activeShortEvals)}
+            onRetakeTest={() => {
+              setShowResults(false);
+              setTestAnswers({});
+              setCurrentQuestionIndex(0);
+              setTestMode(true);
+            }}
+            onNewSession={resetSession}
+            onAskAawax={(question) => openChat(`I got this question wrong:\n\n"${question}"\n\nElaborate, Aawax.`)}
+          />
+        </div>
+      </Portal>
     );
   }
 
   if (testMode && currentQuestion) {
     return (
-      <div className="fixed inset-0 z-[70] overflow-y-auto bg-[#06060b]">
+      <Portal>
         <TestScreen
           questions={flatQuestions}
           questionType={currentQuestion.type}
@@ -565,13 +569,33 @@ export default function GeneratePage() {
           onSubmit={submitTest}
           timerMinutes={timerMinutes}
         />
-      </div>
+      </Portal>
     );
   }
 
   // ── Generate workspace ─────────────────────────────────────────
   return (
     <>
+      {!hasResults && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          className="mb-2 flex flex-col items-center"
+        >
+          <Aawax
+            design={design}
+            color={color}
+            mood={loading ? "think" : "idle"}
+            size={108}
+            glow
+            sparkles
+            interactive
+            onBoop={playBoop}
+          />
+        </motion.div>
+      )}
+
       <PageTitle
         eyebrow="Generate"
         title="Turn notes into questions"
@@ -621,13 +645,9 @@ export default function GeneratePage() {
         </motion.div>
       ) : (
         !loading && (
-          <div className="mt-10 flex flex-col items-center text-center">
-            <Aawax design={design} color={color} mood="idle" size={120} glow float />
-            <p className="mt-3 font-serif text-lg text-white">Ready when you are</p>
-            <p className="mt-1 max-w-xs text-sm text-white/50">
-              Add some study material above and tap Generate to get your first question set.
-            </p>
-          </div>
+          <p className="mt-6 text-center text-sm text-white/40">
+            Add some study material above and tap Generate to get your first question set.
+          </p>
         )
       )}
 
