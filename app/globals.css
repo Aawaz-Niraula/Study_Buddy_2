@@ -289,3 +289,84 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   outline-offset: 2px;
 }
 
+/* ─── Aawax design tokens ────────────────────────────────────────── */
+/* Defaults (violet). Overridden live by MascotContext via JS. */
+:root {
+  --mascot-from: #d8b4fe;
+  --mascot-to: #9333ea;
+  --mascot-foot-alt: #818cf8;
+  --accent: #a855f7;
+  --accent-soft: #c084fc;
+  --accent-glow: 167, 139, 250;
+}
+
+.font-serif {
+  font-family: var(--font-fraunces), ui-serif, Georgia, "Times New Roman", serif;
+}
+
+/* Primary gradient pill button */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  border-radius: 9999px;
+  padding: 0.85rem 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #0a0a12;
+  background: linear-gradient(135deg, var(--accent-soft), var(--accent));
+  box-shadow: 0 8px 24px rgba(var(--accent-glow), 0.35);
+  transition: transform 0.18s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  cursor: pointer;
+  min-height: 48px;
+}
+.btn-primary:hover {
+  box-shadow: 0 10px 30px rgba(var(--accent-glow), 0.5);
+}
+.btn-primary:active {
+  transform: scale(0.98);
+}
+.btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Secondary / outline pill button */
+.btn-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  padding: 0.75rem 1.25rem;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  cursor: pointer;
+  min-height: 44px;
+}
+.btn-outline:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Content card */
+.app-card {
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  padding: 1.25rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
