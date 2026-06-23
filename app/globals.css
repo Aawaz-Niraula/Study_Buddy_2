@@ -136,9 +136,6 @@
     -webkit-overflow-scrolling: touch;
     background: linear-gradient(to bottom, #06060b, #0b0b12, #11111a);
     background-attachment: fixed;
-    /* GPU compositing hint for the root scroll container */
-    -webkit-transform: translateZ(0);
-    transform: translateZ(0);
   }
 }
 
@@ -286,17 +283,11 @@ html {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Smooth scroll on all overflow containers */
+/* Smooth scroll on overflow containers */
 [class*="overflow-y-auto"],
 [class*="overflow-auto"] {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
-}
-
-/* Promote fixed/animated panels to their own GPU layer */
-.fixed {
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
 }
 
 /* Better focus styles for accessibility */
