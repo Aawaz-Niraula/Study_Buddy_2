@@ -13,7 +13,7 @@ export function AppHeader() {
 
   return (
     <>
-      <header className="fixed inset-x-0 top-0 z-40 border-b border-white/[0.06] bg-[#06060b]/80 backdrop-blur-xl">
+      <header className="fixed inset-x-0 top-0 z-40 border-b border-white/[0.06] bg-[#06060b]/80 backdrop-blur-xl lg:hidden">
         <div className="mx-auto flex h-14 max-w-2xl items-center justify-between px-4">
           {/* Left: mascot + app name */}
           <button
